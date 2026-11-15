@@ -28,9 +28,12 @@ pub(crate) fn ticks_to_secs(ticks: u32) -> f64 {
     ticks as f64 / TICKS_PER_SECOND as f64
 }
 
+/// Past this many steps every growth factor in the tables has long overflowed to infinity.
+const POW_MAX_EXPONENT: u32 = 10_000;
+
 fn pow(base: f64, n: u32) -> f64 {
     let mut out = 1.0;
-    for _ in 0..n {
+    for _ in 0..n.min(POW_MAX_EXPONENT) {
         out *= base;
     }
     out

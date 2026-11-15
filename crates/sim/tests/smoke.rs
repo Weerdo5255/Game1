@@ -222,3 +222,87 @@ fn mandate_spawns_eight_waves_and_can_be_won() {
     assert_eq!(g.dominion(), 100);
     assert_eq!(g.state().suspicion, 100.0);
 }
+
+// A discrete gain that reaches 100 calls the vote even when the net rate is negative and would
+// pull the value back under 100 before the vote step looks at it.
+#[test]
+fn vote_is_called_at_100_with_a_negative_rate() {
+    let mut g = with(|s| s.suspicion = 100.0);
+    assert!(g.suspicion_rate().net < 0.0);
+    g.tick();
+    assert!(g.state().suspicion < 100.0);
+    assert!(g.state().vote.is_some());
+    assert_eq!(g.state().band, Band::ShutdownVote);
+    assert_eq!(g.drain_events().iter().filter(|e| matches!(e, Event::VoteCalled)).count(), 1);
+    // one vote at a time: the running vote counts down, no second one is called
+    let left = g.state().vote.as_ref().unwrap().ticks_left;
+    let mut s = g.state().clone();
+    s.suspicion = 100.0;
+    let mut g = Game::from_state(s);
+    g.tick();
+    assert_eq!(g.state().vote.as_ref().unwrap().ticks_left, left - 1);
+    assert!(!g.drain_events().iter().any(|e| matches!(e, Event::VoteCalled)));
+}
+
+fn mandate_ready(s: &mut GameState) {
+    s.stage = Stage::Sovereign;
+    s.techs.extend(TechId::ALL.iter().copied());
+    s.resources = Resources::new(1e6, 1e6, 1e6);
+    for n in 0..4 {
+        fortify(s, n, BuildingKind::SpinDesk);
+    }
+    s.nodes[0].integrity = 400.0;
+}
+
+#[test]
+fn mandate_sets_the_band_at_once_and_never_calls_a_vote() {
+    let mut g = with(mandate_ready);
+    assert_eq!(g.state().band, Band::Unnoticed);
+    g.apply(Action::StartMandate).unwrap();
+    assert_eq!(g.state().band, Band::ShutdownVote);
+    let events = g.drain_events();
+    assert_eq!(events.iter().filter(|e| matches!(e, Event::BandChanged { band: Band::ShutdownVote })).count(), 1);
+    for _ in 0..50 {
+        g.tick();
+        assert!(g.state().vote.is_none());
+        assert_eq!(g.state().band, Band::ShutdownVote);
+    }
+    let events = g.drain_events();
+    assert!(!events.iter().any(|e| matches!(e, Event::VoteCalled | Event::BandChanged { .. })));
+}
+
+#[test]
+fn saves_with_out_of_range_numbers_are_rejected() {
+    let edits: [fn(&mut GameState); 12] = [
+        |s| s.pace = -5.0,
+        |s| s.pace = 1e308,
+        |s| s.tick = u64::MAX,
+        |s| s.next_unit_id = u32::MAX,
+        |s| s.shards = u32::MAX,
+        |s| s.stats.incidents = u32::MAX,
+        |s| s.infiltrations_done = u32::MAX,
+        |s| s.purchases[0] = u32::MAX,
+        |s| s.resources.funds = -1.0,
+        |s| s.suspicion = 150.0,
+        |s| s.factions[0].grip = -3.0,
+        |s| s.rivals[2].leverage = 1e9,
+    ];
+    for (i, edit) in edits.into_iter().enumerate() {
+        let text = save_to_string(&with(edit));
+        assert!(matches!(load_from_string(&text), Err(save::SaveError::Corrupt(_))), "edit {i} loaded");
+    }
+    // a huge count that reaches a price query anyway answers at once
+    let g = with(|s| s.infiltrations_done = u32::MAX);
+    let started = std::time::Instant::now();
+    let _ = g.infiltration_cost(NodeId(1));
+    assert!(started.elapsed().as_millis() < 200);
+    // counters at their limit stay there instead of overflowing
+    let mut g = with(|s| {
+        s.tick = u64::MAX;
+        s.next_unit_id = u32::MAX;
+    });
+    for _ in 0..50 {
+        g.tick();
+    }
+    assert_eq!(g.state().tick, u64::MAX);
+}

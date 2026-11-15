@@ -12,7 +12,7 @@ const G4_HALVING: f64 = 0.5;
 const PER_MIN_TO_PER_TICK: f64 = 1.0 / (60.0 * TICKS_PER_SECOND as f64);
 
 pub(crate) fn step(game: &mut Game) {
-    game.state.tick += 1;
+    game.state.tick = game.state.tick.saturating_add(1);
     let alarm = core_alarm(&game.state);
     let steps: [fn(&mut Game); 11] =
         [timers, income, drift, channels, spawning, movement, defence_fire, siege, deaths, regeneration, progression];
@@ -196,7 +196,7 @@ pub(crate) fn damage_unit(game: &mut Game, id: UnitId, amount: f64, kind: Damage
     let def = &UNITS[ukind.index()];
     match (def.class, kind) {
         (UnitClass::Human, DamageKind::Soft) => {
-            game.state.stats.converts += 1;
+            game.state.stats.converts = game.state.stats.converts.saturating_add(1);
             game.events.push(Event::UnitConverted { unit: id, kind: ukind, source, x, y });
             send_home(game, i, true);
         }
@@ -205,7 +205,7 @@ pub(crate) fn damage_unit(game: &mut Game, id: UnitId, amount: f64, kind: Damage
             if calc::has(&game.state, TechId::G4) {
                 suspicion *= G4_HALVING;
             }
-            game.state.stats.incidents += 1;
+            game.state.stats.incidents = game.state.stats.incidents.saturating_add(1);
             remove_unit(game, i);
             game.events.push(Event::UnitIncident { unit: id, kind: ukind, x, y, suspicion });
             add_suspicion(game, suspicion, SuspicionCause::Incident);
@@ -214,9 +214,9 @@ pub(crate) fn damage_unit(game: &mut Game, id: UnitId, amount: f64, kind: Damage
             let honeypot = honeypots(&game.state).iter().find(|p| within(x, y, p.x, p.y, p.range)).map(|p| p.node);
             let shards = if honeypot.is_some() { def.shards } else { 0 };
             let s = &mut game.state;
-            s.shards += shards;
-            s.stats.shards_gained += shards;
-            s.stats.machines_destroyed += 1;
+            s.shards = s.shards.saturating_add(shards);
+            s.stats.shards_gained = s.stats.shards_gained.saturating_add(shards);
+            s.stats.machines_destroyed = s.stats.machines_destroyed.saturating_add(1);
             remove_unit(game, i);
             game.events.push(Event::UnitDestroyed { unit: id, kind: ukind, x, y, shards, honeypot });
         }
@@ -282,7 +282,7 @@ fn sever(game: &mut Game, node: NodeId) {
     for u in s.units.iter_mut().filter(|u| u.sieging == Some(node)) {
         resume_route(u, node, &game.routes);
     }
-    s.stats.nodes_severed += 1;
+    s.stats.nodes_severed = s.stats.nodes_severed.saturating_add(1);
     game.events.push(Event::NodeSevered { node });
     if ruled {
         game.events.push(Event::RegionLost { region });
@@ -315,7 +315,7 @@ fn timers(game: &mut Game) {
         if let Some(inf) = s.infiltration.take() {
             let compliant = s.nodes[inf.node.index()].compliant;
             if !inf.retake {
-                s.infiltrations_done += 1;
+                s.infiltrations_done = s.infiltrations_done.saturating_add(1);
             }
             gain_node(game, inf.node, if inf.retake { GainCause::Retaken } else { GainCause::Infiltrated });
             if !inf.retake {
@@ -402,7 +402,7 @@ fn resolve_op(game: &mut Game, op: RunningOp) {
         (OpKind::GreasePalms, _) => s.grease_cooldown = cooldown,
         (OpKind::Scapegoat, _) => {
             s.scapegoat_cooldown = cooldown;
-            s.scapegoat_uses += 1;
+            s.scapegoat_uses = s.scapegoat_uses.saturating_add(1);
         }
         (OpKind::CharmOffensive, OpTarget::Faction(f)) => s.factions[f.index()].charm_cooldown = cooldown,
         (OpKind::ForgedMemo, OpTarget::Faction(f)) => s.factions[f.index()].memo_cooldown = cooldown,
@@ -411,7 +411,7 @@ fn resolve_op(game: &mut Game, op: RunningOp) {
     }
     let mut suspicion = 0.0;
     if success {
-        s.stats.ops_succeeded += 1;
+        s.stats.ops_succeeded = s.stats.ops_succeeded.saturating_add(1);
         match (op.kind, op.target) {
             (OpKind::CharmOffensive | OpKind::ForgedMemo, OpTarget::Faction(f)) => {
                 if !s.factions[f.index()].captured {
@@ -435,7 +435,7 @@ fn resolve_op(game: &mut Game, op: RunningOp) {
             _ => {}
         }
     } else {
-        s.stats.ops_failed += 1;
+        s.stats.ops_failed = s.stats.ops_failed.saturating_add(1);
         let mut amount = def.fail_suspicion;
         if calc::has(s, TechId::G4) {
             amount *= G4_HALVING;
@@ -464,6 +464,9 @@ fn drift(game: &mut Game) {
     let t = &TUNING;
     let rate = calc::suspicion_rate(&game.state).net;
     let s = &mut game.state;
+    // Discrete gains (Incidents, stories, failed ops, actions between ticks) can reach 100 and
+    // be pulled just under it again by a negative rate, so the vote looks at the value first.
+    let reached = s.suspicion >= 100.0;
     s.suspicion =
         if s.mandate.is_some() { 100.0 } else { (s.suspicion + rate * PER_MIN_TO_PER_TICK).max(0.0).min(100.0) };
     s.story_budget = (s.story_budget + t.story_budget_refill * DT).min(t.story_budget_max);
@@ -477,7 +480,7 @@ fn drift(game: &mut Game) {
         }
         f.grip = f.grip.max(0.0).min(100.0);
     }
-    vote(game);
+    vote(game, reached);
     if game.state.outcome != Outcome::Running {
         return;
     }
@@ -499,7 +502,7 @@ fn drift(game: &mut Game) {
     }
 }
 
-fn vote(game: &mut Game) {
+fn vote(game: &mut Game, reached: bool) {
     let t = &TUNING;
     let s = &mut game.state;
     if s.mandate.is_some() {
@@ -507,7 +510,7 @@ fn vote(game: &mut Game) {
     }
     let total = calc::secs_to_ticks(t.vote_secs);
     let mut called = false;
-    if s.vote.is_none() && s.suspicion >= 100.0 {
+    if s.vote.is_none() && (reached || s.suspicion >= 100.0) {
         s.vote = Some(VoteState { ticks_left: total, convoys_sent: 0 });
         game.events.push(Event::VoteCalled);
         called = true;
@@ -820,7 +823,7 @@ fn spawning(game: &mut Game) {
 fn spawn_unit(game: &mut Game, q: &QueuedSpawn) {
     let s = &mut game.state;
     let id = UnitId(s.next_unit_id);
-    s.next_unit_id += 1;
+    s.next_unit_id = s.next_unit_id.saturating_add(1);
     let hp = calc::unit_max_hp(s, q.unit, q.source);
     let (x, y) = pos(q.origin);
     s.units.push(Unit {
@@ -1173,7 +1176,7 @@ fn siege(game: &mut Game) {
                 let s = &mut game.state;
                 let suspicion = t.story_suspicion.min(s.story_budget).max(0.0);
                 s.story_budget -= suspicion;
-                s.stats.stories_filed += 1;
+                s.stats.stories_filed = s.stats.stories_filed.saturating_add(1);
                 game.events.push(Event::StoryFiled { node, suspicion });
                 add_suspicion(game, suspicion, SuspicionCause::Story);
             }

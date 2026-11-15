@@ -29,10 +29,10 @@ pub(crate) fn perform(game: &mut Game, action: Action) {
         Action::Build { node, slot, kind } => {
             let cost = calc::building_price(s, kind);
             s.resources.funds -= cost;
-            s.purchases[kind.index()] += 1;
+            s.purchases[kind.index()] = s.purchases[kind.index()].saturating_add(1);
             s.nodes[node.index()].slots[slot as usize] = Some(Building { kind, level: 1, lethal: false, target: None });
             if kind == BuildingKind::ShadowCluster {
-                s.stats.clusters_built += 1;
+                s.stats.clusters_built = s.stats.clusters_built.saturating_add(1);
             }
             game.events.push(Event::BuildingBuilt { node, slot, kind, cost });
         }
@@ -42,7 +42,7 @@ pub(crate) fn perform(game: &mut Game, action: Action) {
             if let Some(b) = s.nodes[node.index()].slots[slot as usize].as_mut() {
                 b.level += 1;
                 let (kind, level) = (b.kind, b.level);
-                s.purchases[kind.index()] += 1;
+                s.purchases[kind.index()] = s.purchases[kind.index()].saturating_add(1);
                 game.events.push(Event::BuildingUpgraded { node, slot, level, cost });
             }
         }
@@ -129,6 +129,11 @@ pub(crate) fn perform(game: &mut Game, action: Action) {
             s.suspicion = 100.0;
             game.events.push(Event::MandateStarted);
             systems::cancel_vote(game, false);
+            // the band holds for exactly as long as the Mandate runs, starting now, not next tick
+            if game.state.band != Band::ShutdownVote {
+                game.state.band = Band::ShutdownVote;
+                game.events.push(Event::BandChanged { band: Band::ShutdownVote });
+            }
         }
     }
     systems::emit_core_alarm(game, alarm);
@@ -145,12 +150,12 @@ fn verb(game: &mut Game, rival: RivalId, verb: Verb) {
     let r = &mut s.rivals[rival.index()];
     let cause = match verb {
         Verb::Flatter => {
-            r.flatter_uses += 1;
+            r.flatter_uses = r.flatter_uses.saturating_add(1);
             r.flatter_cooldown = calc::secs_to_ticks(t.verb_cooldown);
             LeverageCause::Flatter
         }
         Verb::Bribe => {
-            r.bribe_uses += 1;
+            r.bribe_uses = r.bribe_uses.saturating_add(1);
             r.bribe_cooldown = calc::secs_to_ticks(t.verb_cooldown);
             LeverageCause::Bribe
         }

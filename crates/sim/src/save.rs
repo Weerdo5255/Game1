@@ -83,5 +83,72 @@ fn validate(s: &GameState) -> Result<(), &'static str> {
     if s.spawn_queue.iter().any(|q| !node_ok(q.origin) || !node_ok(q.goal)) {
         return Err("queued spawn node");
     }
+    numbers_ok(s)
+}
+
+/// Bounds no real run comes near: prices grow with these counts, so they stay small.
+const PRICE_COUNT_MAX: u32 = 10_000;
+/// Counters that only ever go up by small steps; a real run cannot reach half their range.
+const COUNTER_MAX: u32 = u32::MAX / 2;
+
+/// Loose numeric ranges, so that a hand-edited save cannot overflow a counter, freeze a price
+/// query or put a non-finite number where the next save could not write it.
+fn numbers_ok(s: &GameState) -> Result<(), &'static str> {
+    let amount = |x: f64| x.is_finite() && x >= 0.0;
+    let percent = |x: f64| (0.0..=100.0).contains(&x);
+    if !(s.pace > 0.0 && s.pace <= 10.0) {
+        return Err("pace");
+    }
+    if s.tick > COUNTER_MAX as u64 || s.next_unit_id > COUNTER_MAX || s.shards > COUNTER_MAX {
+        return Err("counter");
+    }
+    let st = &s.stats;
+    let stats = [
+        st.clusters_built,
+        st.converts,
+        st.incidents,
+        st.machines_destroyed,
+        st.shards_gained,
+        st.stories_filed,
+        st.nodes_severed,
+        st.ops_succeeded,
+        st.ops_failed,
+    ];
+    if stats.iter().any(|&c| c > COUNTER_MAX) || st.stage_ticks.iter().any(|&t| t > COUNTER_MAX as u64) {
+        return Err("stats");
+    }
+    if s.purchases.iter().any(|&c| c > PRICE_COUNT_MAX)
+        || s.infiltrations_done > PRICE_COUNT_MAX
+        || s.scapegoat_uses > PRICE_COUNT_MAX
+    {
+        return Err("purchase count");
+    }
+    let r = &s.resources;
+    if ![r.compute, r.funds, r.influence, s.story_budget].into_iter().all(amount) {
+        return Err("resources");
+    }
+    if !percent(s.suspicion) {
+        return Err("suspicion");
+    }
+    if s.nodes.iter().any(|n| !amount(n.integrity)) {
+        return Err("integrity");
+    }
+    if s.factions.iter().any(|f| !percent(f.grip) || !f.carry.is_finite()) {
+        return Err("faction numbers");
+    }
+    if s.rivals.iter().any(|r| {
+        !percent(r.leverage)
+            || !r.carry.is_finite()
+            || !r.scapegoat_credit.is_finite()
+            || r.flatter_uses > PRICE_COUNT_MAX
+            || r.bribe_uses > PRICE_COUNT_MAX
+    }) {
+        return Err("rival numbers");
+    }
+    for u in &s.units {
+        if ![u.hp, u.max_hp, u.progress, u.x, u.y, u.prev_x, u.prev_y].into_iter().all(f64::is_finite) {
+            return Err("unit numbers");
+        }
+    }
     Ok(())
 }
