@@ -1,1 +1,104 @@
-{}
+{
+  "_comment": "Role presets used by the character creator (GUI and --new on the command line). 'looks' lists appearance options to pick from at random; everything can be changed afterwards.",
+
+  "engineer": {
+    "title": "Engineer", "faction": "engineering",
+    "attrs": {"body": 6, "dexterity": 7, "intellect": 6, "presence": 4, "resolve": 6},
+    "skills": {"engineering": 5, "tech": 3, "athletics": 2},
+    "access": ["crew", "engineering"], "schedule": "day",
+    "job": {"system": "reactor", "duty": "maintain", "maintain": ["reactor", "life_support"]},
+    "inventory": {"multitool": 1}, "equipped": {"tool": "multitool"}, "credits": 50,
+    "looks": {"outfit": ["jumpsuit"], "primary": ["orange", "amber", "olive"], "hair": ["cap", "buzz", "short", "ponytail"]}
+  },
+  "technician": {
+    "title": "Technician", "faction": "engineering",
+    "attrs": {"body": 4, "dexterity": 6, "intellect": 7, "presence": 5, "resolve": 5},
+    "skills": {"tech": 5, "engineering": 3, "science": 2},
+    "access": ["crew", "engineering"], "schedule": "day",
+    "job": {"system": "fabricator", "restock": ["fabricator"]},
+    "inventory": {"diag_scanner": 1}, "equipped": {"tool": "diag_scanner"}, "credits": 35,
+    "looks": {"outfit": ["jumpsuit", "uniform"], "primary": ["cyan", "teal", "steel"], "hair": ["spiky", "short", "bob"]}
+  },
+  "scientist": {
+    "title": "Researcher", "faction": "science",
+    "attrs": {"body": 3, "dexterity": 5, "intellect": 8, "presence": 4, "resolve": 6},
+    "skills": {"science": 6, "tech": 4, "medicine": 2},
+    "access": ["crew", "science"], "schedule": "late",
+    "job": {"system": "lab"},
+    "inventory": {"nutrient_paste": 1}, "credits": 45,
+    "looks": {"outfit": ["labcoat"], "primary": ["purple", "teal", "navy"], "hair": ["long", "bob", "short", "bald"], "extras": [["glasses"], []]}
+  },
+  "medic": {
+    "title": "Medic", "faction": "science",
+    "attrs": {"body": 4, "dexterity": 6, "intellect": 7, "presence": 6, "resolve": 6},
+    "skills": {"medicine": 6, "science": 3, "persuasion": 3},
+    "access": ["crew", "medical"], "schedule": "day",
+    "job": {"system": "medbay"},
+    "inventory": {"medkit": 1}, "credits": 55,
+    "looks": {"outfit": ["labcoat", "uniform"], "primary": ["teal", "green", "white"], "hair": ["short", "bob", "ponytail"]}
+  },
+  "botanist": {
+    "title": "Botanist", "faction": "science",
+    "attrs": {"body": 5, "dexterity": 6, "intellect": 6, "presence": 5, "resolve": 6},
+    "skills": {"science": 5, "medicine": 2, "survival": 2, "engineering": 1},
+    "access": ["crew"], "schedule": "day",
+    "job": {"system": "hydroponics", "duty": "maintain", "maintain": ["hydroponics"]},
+    "inventory": {"fresh_greens": 1}, "credits": 40,
+    "looks": {"outfit": ["uniform", "jumpsuit"], "primary": ["green", "olive", "tan"], "hair": ["ponytail", "long", "short"]}
+  },
+  "security": {
+    "title": "Security Officer", "faction": "command",
+    "attrs": {"body": 7, "dexterity": 6, "intellect": 5, "presence": 6, "resolve": 7},
+    "skills": {"intimidation": 5, "athletics": 4, "survival": 2, "stealth": 1},
+    "access": ["crew", "security"], "schedule": "security",
+    "job": {"markers": ["patrol_hub", "patrol_hangar", "patrol_eng", "patrol_command", "patrol_habitat"], "label": "On patrol"},
+    "inventory": {"keycard_sec": 1}, "credits": 60,
+    "looks": {"outfit": ["vest"], "primary": ["slate", "navy", "black"], "secondary": ["red", "amber"], "hair": ["buzz", "short", "ponytail"]}
+  },
+  "quartermaster": {
+    "title": "Storekeeper", "faction": "stores",
+    "attrs": {"body": 5, "dexterity": 6, "intellect": 6, "presence": 7, "resolve": 5},
+    "skills": {"persuasion": 5, "stealth": 2, "tech": 2},
+    "access": ["crew", "stores"], "schedule": "day",
+    "job": {"region": "stores", "label": "Minding the stores"},
+    "inventory": {"coffee_bulb": 2}, "credits": 150,
+    "looks": {"outfit": ["vest", "uniform"], "primary": ["olive", "brown", "tan"], "hair": ["short", "cap", "bob"]}
+  },
+  "administrator": {
+    "title": "Administrator", "faction": "command",
+    "attrs": {"body": 4, "dexterity": 4, "intellect": 7, "presence": 8, "resolve": 7},
+    "skills": {"persuasion": 6, "intimidation": 3, "tech": 2},
+    "access": ["crew", "command"], "schedule": "command",
+    "job": {"region": "admin_office", "label": "Working at a desk"},
+    "inventory": {"coffee_bulb": 1}, "credits": 120,
+    "looks": {"outfit": ["uniform"], "primary": ["navy", "slate"], "secondary": ["amber", "white"], "hair": ["bob", "short", "long"]}
+  },
+  "miner": {
+    "title": "Driller", "faction": "engineering",
+    "attrs": {"body": 8, "dexterity": 6, "intellect": 4, "presence": 5, "resolve": 6},
+    "skills": {"survival": 5, "athletics": 5, "engineering": 3},
+    "access": ["crew"], "schedule": "day",
+    "job": {"system": "drill", "duty": "maintain", "maintain": ["drill"]},
+    "inventory": {"thermal_suit": 1}, "equipped": {"suit": "thermal_suit"}, "credits": 40,
+    "looks": {"outfit": ["suit"], "primary": ["amber", "orange"], "secondary": ["orange", "steel"], "hair": ["helmet"]}
+  },
+  "drone": {
+    "title": "Maintenance Drone", "faction": "engineering",
+    "attrs": {"body": 5, "dexterity": 7, "intellect": 5, "presence": 3, "resolve": 10},
+    "skills": {"engineering": 3, "tech": 4},
+    "traits": ["synthetic"], "access": ["crew", "engineering"], "schedule": "drone",
+    "job": {"duty": "maintain", "maintain": ["life_support", "grid"],
+            "markers": ["patrol_hub", "patrol_habitat", "patrol_eng"], "label": "Running its maintenance loop"},
+    "inventory": {}, "credits": 0,
+    "looks": {"body": ["drone"], "primary": ["steel", "white", "slate"], "secondary": ["cyan", "amber", "green"]}
+  },
+  "civilian": {
+    "title": "Resident", "faction": "",
+    "attrs": {"body": 5, "dexterity": 5, "intellect": 5, "presence": 5, "resolve": 5},
+    "skills": {"persuasion": 2, "survival": 1},
+    "access": ["crew"], "schedule": "resting",
+    "job": {},
+    "inventory": {"ration_pack": 1}, "credits": 30,
+    "looks": {"outfit": ["uniform", "jumpsuit", "vest"]}
+  }
+}

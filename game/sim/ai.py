@@ -245,16 +245,21 @@ def _run_goal(world, npc, goal: dict, dt: float) -> None:
         spec = steps[i]
         handler = HANDLERS.get(spec.get("do", ""))
         state = goal["state"]
-        if handler is None:
-            status = DONE
-        elif "if" in spec and not state.get("_ok"):
-            if script.eval(spec["if"], {"self": npc.id, "npc": npc.id}):
-                state["_ok"] = True
-                status = handler(world, npc, goal, spec, state, dt)
-            else:
+        try:
+            if handler is None:
                 status = DONE
-        else:
-            status = handler(world, npc, goal, spec, state, dt)
+            elif "if" in spec and not state.get("_ok"):
+                if script.eval(spec["if"], {"self": npc.id, "npc": npc.id}):
+                    state["_ok"] = True
+                    status = handler(world, npc, goal, spec, state, dt)
+                else:
+                    status = DONE
+            else:
+                status = handler(world, npc, goal, spec, state, dt)
+        except Exception as exc:  # noqa: BLE001 - a broken goal in a content file must not stop the world
+            script.errors.append("%s: goal %r step %d (%s) failed: %s: %s" % (
+                npc.id, goal.get("id"), i, spec.get("do"), type(exc).__name__, exc))
+            status = FAILED
         if status == RUNNING:
             return
         if status == DONE:

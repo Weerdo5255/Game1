@@ -334,7 +334,7 @@ def build_all() -> Dict[str, GameMap]:
         "#............................#",
         "####5########6######....######",
         "#.....L..#.....L..#..........#",
-        "#B.....A.#E.....B.#..TT....p.#",
+        "#B.E...A.#E.A...B.#..TT....p.#",
         "#........#........#..........#",
         "#........#........#.h........#",
         "#..p.....#.....p..#.....Tt...#",
@@ -364,8 +364,10 @@ def build_all() -> Dict[str, GameMap]:
     m.obj("marker", "7", id="patrol_habitat", name="patrol_habitat")
     beds = [(("B", 0), "bed_player", "player"), (("E", 0), "bed_pip", "pip"), (("A", 0), "bed_wren", "wren"),
             (("B", 1), "bed_tuck", "tuck"), (("E", 1), "bed_osei", "osei"), (("A", 1), "bed_halloran", "halloran"),
-            (("B", 2), "bed_bram", "bram"), (("A", 2), "bed_dex", "dex"), (("E", 2), "bed_lin", "lin"),
-            (("B", 3), "bed_pell", "pell")]
+            (("B", 2), "bed_bram", "bram"), (("A", 2), "bed_dex", "dex"), (("E", 3), "bed_lin", "lin"),
+            (("B", 3), "bed_pell", "pell"),
+            # two unclaimed bunks for characters added later with the character creator
+            (("E", 2), "bed_spare_1", ""), (("A", 3), "bed_spare_2", "")]
     for ref, bed_id, owner in beds:
         m.obj("bed", ref, id=bed_id, dy=-1, owner=owner, name="Bunk")
     m.obj("container", ("L", 0), id="player_locker", name="Your locker",
