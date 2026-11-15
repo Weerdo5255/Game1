@@ -4,7 +4,7 @@ use crate::text::{self, Sys};
 use crate::theme::alpha;
 use crate::ui::{Ui, DENSE, SMALL};
 use macroquad::prelude::*;
-use sim::Game;
+use sim::{Band, Event, Game};
 
 const MAX_ENTRIES: usize = 200;
 const ROWS: usize = 8;
@@ -13,7 +13,25 @@ const LINE_H: f32 = 18.0;
 /// Appends the log line of each of this frame's events. Called once per frame before drawing.
 pub fn ingest(st: &mut UiState) {
     for e in &st.events {
-        if let Some(entry) = text::log_line(e) {
+        let mut entries: Vec<(String, Sys)> = text::log_line(e).into_iter().collect();
+        match e {
+            // The remedy, once per run, at the moment it starts to matter.
+            Event::BandChanged { band: Band::Alarmed } if !st.told_alarmed => {
+                st.told_alarmed = true;
+                entries.push((text::LOG_ALARMED_REMEDY.to_owned(), Sys::Feedback));
+            }
+            // The third time a node is cut off, say that holding it needs more than a rebuild.
+            Event::NodeSevered { node } => {
+                if let Some(count) = st.severed.get_mut(node.index()) {
+                    *count = count.saturating_add(1);
+                    if *count == 3 {
+                        entries.push((text::log_severed_again(*node), Sys::Threat));
+                    }
+                }
+            }
+            _ => {}
+        }
+        for entry in entries {
             st.log.push(entry);
             if st.log_scroll > 0 {
                 st.log_scroll += 1;

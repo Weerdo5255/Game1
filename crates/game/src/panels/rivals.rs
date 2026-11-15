@@ -36,7 +36,7 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
         ui.bar(bar, (rs.leverage / 100.0) as f32, col);
         ui.text_right(&format!("{:.0}", rs.leverage.floor()), row.x + row.w - 6.0, row.y + 22.0, DENSE, t.text);
         if ui.hovered(row) {
-            ui.tip(&format!(
+            ui.tip(row, &format!(
                 "{} (tier {})\n{}\nWakes at Dominion {} or when you own a node in its region.\n{}: Leverage {:.1} / 100.",
                 def.name,
                 def.tier,
@@ -80,7 +80,7 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     ui.bar(bar, (rs.leverage / 100.0) as f32, lerp_color(col, t.panel, 0.4));
     ui.text_in(&format!("Leverage {:.0} / 100", rs.leverage.floor()), bar, SMALL, t.text);
     if ui.hovered(bar) {
-        ui.tip(&format!("Leverage {:.1} / 100\nAt 100 a Contacted rival is Cornered for {}: make the Offer in time or it is Enraged and Leverage falls to {:.0}.", rs.leverage, fmt_secs(TUNING.cornered_secs), TUNING.lapse_leverage));
+        ui.tip(bar, &format!("Leverage {:.1} / 100\nAt 100 a Contacted rival is Cornered for {}: make the Offer in time or it is Enraged and Leverage falls to {:.0}.", rs.leverage, fmt_secs(TUNING.cornered_secs), TUNING.lapse_leverage));
     }
     let weak = game.weakness_active(id);
     let wy = ui.text_wrapped(

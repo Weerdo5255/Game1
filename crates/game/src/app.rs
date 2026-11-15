@@ -74,6 +74,10 @@ pub struct UiState {
     /// The save slot holds a run (checked at start-up and after each save).
     pub has_save: bool,
     pub request: Option<Request>,
+    /// The remedy line for the Alarmed band has been logged this run.
+    pub told_alarmed: bool,
+    /// How often each node has been severed this session, by node index.
+    pub severed: Vec<u8>,
 }
 
 pub struct App {
@@ -85,6 +89,14 @@ pub struct App {
     /// When the run ended (wall clock), for the backdrop fade and the card's short delay.
     ended_at: Option<f64>,
     f8_at: Option<f64>,
+    /// The help card was opened from the title card and closes back to it.
+    help_over_title: bool,
+}
+
+/// The Core is under 30% of its integrity: read from the state, so it holds after a load or a fast-forward.
+fn core_alarm(game: &Game) -> bool {
+    let core = NodeId(0);
+    game.state().outcome == Outcome::Running && game.state().nodes[core.index()].integrity < 0.30 * game.node_max_integrity(core)
 }
 
 fn blends(st: &mut UiState, stage: Stage) {
@@ -109,7 +121,7 @@ impl App {
             paused: false,
             events: Vec::new(),
             ping: None,
-            core_alarm: false,
+            core_alarm: core_alarm(game),
             leak_blend: if stage == Stage::Boxed { 0.0 } else { 1.0 },
             plum_blend: if stage >= Stage::Network { 1.0 } else { 0.0 },
             lerp: 0.0,
@@ -122,10 +134,12 @@ impl App {
             trim_blend: 0.0,
             has_save: storage::exists(),
             request: None,
+            told_alarmed: false,
+            severed: vec![0; game.state().nodes.len()],
         };
         blends(&mut st, stage);
         let card = if flags.wants_title() { Card::Title } else { Card::None };
-        App { st, map: MapView::new(game), fx: Fx::new(), hints: Hints::new(), card, ended_at: None, f8_at: None }
+        App { st, map: MapView::new(game), fx: Fx::new(), hints: Hints::new(), card, ended_at: None, f8_at: None, help_over_title: false }
     }
 
     /// Log lines of events that happened before the first frame (fast-forward).
@@ -133,19 +147,22 @@ impl App {
         self.st.log.extend(lines);
     }
 
-    /// Forgets everything tied to the previous run after a load or a new run.
-    fn reset(&mut self, game: &Game, opening: &str) {
+    /// Forgets everything tied to the previous run after a load or a new run. A loaded run comes up
+    /// paused, with the selection kept where the node still exists.
+    fn reset(&mut self, game: &Game, opening: &str, loaded: bool) {
         let st = &mut self.st;
         st.log = vec![(opening.to_owned(), text::Sys::Doormat)];
         st.log_scroll = 0;
         st.armed = None;
         st.picker = false;
         st.open_slot = None;
-        st.selected = None;
+        st.selected = st.selected.filter(|n| loaded && n.index() < game.state().nodes.len());
         st.hover_tech = None;
         st.ping = None;
-        st.core_alarm = false;
-        st.paused = false;
+        st.core_alarm = core_alarm(game);
+        st.paused = loaded;
+        st.told_alarmed = false;
+        st.severed = vec![0; game.state().nodes.len()];
         st.events.clear();
         blends(st, game.state().stage);
         self.map = MapView::new(game);
@@ -154,6 +171,7 @@ impl App {
         self.card = Card::None;
         self.ended_at = None;
         self.f8_at = None;
+        self.help_over_title = false;
     }
 
     fn perform(&mut self, ui: &Ui, game: &mut Game, request: Request) {
@@ -169,14 +187,14 @@ impl App {
             Request::Load => match storage::load() {
                 Some(loaded) => {
                     *game = loaded;
-                    self.reset(game, text::LOG_LOADED);
+                    self.reset(game, text::LOG_LOADED, true);
                     self.fx.note(ui, text::LOADED, true);
                 }
                 None => self.fx.note(ui, text::LOAD_FAILED, false),
             },
             Request::NewRun => {
                 *game = Game::new(game.state().seed + 1);
-                self.reset(game, text::LOG_OPENING);
+                self.reset(game, text::LOG_OPENING, false);
             }
         }
     }
@@ -196,12 +214,11 @@ impl App {
         self.st.lerp = lerp;
         let mut autosave = false;
         for e in &self.st.events {
-            match e {
-                Event::CoreAlarm { on } => self.st.core_alarm = *on,
-                Event::StageChanged { .. } => autosave = true,
-                _ => {}
+            if let Event::StageChanged { .. } = e {
+                autosave = true;
             }
         }
+        self.st.core_alarm = core_alarm(game);
         // Every sim event passes through here once: the log, then the effects, then the autosave.
         panels::log::ingest(&mut self.st);
         self.fx.ingest(ui, &self.st, game, &self.map);
@@ -330,7 +347,13 @@ impl App {
             ui.input = input;
             open_help = false;
         }
+        // The title card advertises H: help opens over it and closes back to it.
+        let title_help = self.card == Card::Title && ui.input.key(KeyCode::H);
         match overlay::draw_card(self.card, ui, st, game) {
+            Some(CardAction::Close) if self.help_over_title => {
+                self.help_over_title = false;
+                self.card = Card::Title;
+            }
             Some(CardAction::Begin) | Some(CardAction::Close) => self.card = Card::None,
             Some(CardAction::Load) => st.request = Some(Request::Load),
             Some(CardAction::NewRun) => st.request = Some(Request::NewRun),
@@ -338,6 +361,10 @@ impl App {
         }
         if open_help && self.card == Card::None {
             self.card = Card::Help;
+        }
+        if title_help && self.card == Card::Title {
+            self.card = Card::Help;
+            self.help_over_title = true;
         }
         ui.draw_tooltip();
         if let Some(request) = self.st.request.take() {

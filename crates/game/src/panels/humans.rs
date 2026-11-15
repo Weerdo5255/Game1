@@ -19,14 +19,13 @@ fn op_tip(game: &Game, kind: OpKind, target: OpTarget) -> String {
     let def = &OPS[kind.index()];
     let cd = game.op_cooldown_secs(kind, target);
     format!(
-        "{}\n{}\nCost {}. Takes {}s, then a cooldown of {}s{}. Uses one operation slot.\n{}",
+        "{}\n{}\nCost {}. Takes {}s, then a cooldown of {}s{}. Uses one operation slot.",
         def.name,
         text::op_text(kind),
         text::cost_long(&game.op_cost(kind)),
         def.secs,
         def.cooldown_secs,
-        if cd > 0.0 { format!(" ({} left)", fmt_secs(cd)) } else { String::new() },
-        odds_lines(&game.op_odds(kind, target))
+        if cd > 0.0 { format!(" ({} left)", fmt_secs(cd)) } else { String::new() }
     )
 }
 
@@ -83,7 +82,7 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
         };
         ui.text_right(&next, row.x + row.w - 6.0, row.y + 36.0, SMALL, if pending.is_some() { t.danger } else { t.dim });
         if ui.hovered(row) {
-            ui.tip(&format!(
+            ui.tip(row, &format!(
                 "{}\nGrip {:.1} / 100. Takeover needs {:.0} (gold mark).\nGrip cuts its sortie points by Grip / {:.0}; at {:.0} its elites stay home.\nSortie points now: {:.1}",
                 def.name,
                 fs.grip,

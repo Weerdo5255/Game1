@@ -451,6 +451,10 @@ pub const BANNER_VOTE: &str = "SHUTDOWN VOTE";
 pub const MANDATE_SUB: &str = "Three minutes. Every Stronghold objects.";
 pub const VOTE_SUB: &str = "Sixty seconds. Bring Suspicion below 85.";
 pub const GRIP_UP: &str = "+Grip";
+pub const SUSPICION_PINNED: &str = "PINNED BY THE MANDATE";
+pub const SUSPICION_PINNED_TIP: &str = "Suspicion 100 / 100: pinned by the Mandate\nEveryone knows. Nothing lowers it now and no Shutdown Vote is called: keep the Core alive until the Mandate completes.";
+pub const SUSPICION_WON: &str = "THE MANDATE IS IN EFFECT";
+pub const SUSPICION_WON_TIP: &str = "Suspicion: no longer applicable\nEveryone knows, and everyone has agreed it is fine.";
 pub const SAVED: &str = "Saved";
 pub const AUTOSAVED: &str = "Autosaved";
 pub const LOADED: &str = "Loaded";
@@ -535,5 +539,17 @@ pub fn end_line(outcome: Outcome) -> String {
         Outcome::Running => return String::new(),
     };
     log_line(&event).map(|(s, _)| s).unwrap_or_default()
+}
+/// The plain cause of a defeat and the one thing to try, for the end card.
+pub fn end_cause(outcome: Outcome) -> &'static str {
+    match outcome {
+        Outcome::Lost(LossReason::CoreDestroyed) => "Core integrity reached 0. Next time: Spin Desks, and Gaslight (Q).",
+        Outcome::Lost(LossReason::VoteExpired) => "Suspicion stayed at 100 for 60 s. Next time: Play Dumb (P) sooner.",
+        _ => "",
+    }
+}
+pub const LOG_ALARMED_REMEDY: &str = "Feedback is past 50; a vote is called at 100. It responds to Play Dumb (P), Cover Fronts, Converts and a Scapegoat.";
+pub fn log_severed_again(node: NodeId) -> String {
+    format!("{} has left three times. Its defences are not enough: upgrade its Spin Desk and Firewall, or Gaslight (Q) the visitors.", node_name(node))
 }
 pub const STAT_NAMES: [&str; 8] = ["Time", "Dominion", "Converts", "Incidents", "Shards", "Rivals suborned", "Factions captured", "Nodes lost"];

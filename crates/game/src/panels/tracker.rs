@@ -82,7 +82,7 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
                 } else {
                     "Neutral"
                 };
-                ui.tip(&format!("{}\n{}, {}: {}", def.name, crate::text::node_kind_name(def.kind), reg.name, state));
+                ui.tip(hit, &format!("{}\n{}, {}: {}", def.name, crate::text::node_kind_name(def.kind), reg.name, state));
                 if ui.input.left_pressed {
                     select(st, def.id, owned, ui.time);
                 }

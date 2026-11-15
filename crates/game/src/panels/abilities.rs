@@ -90,8 +90,8 @@ fn button(ui: &mut Ui, st: &mut UiState, game: &mut Game, r: Rect, id: AbilityId
     if ui.hovered(r) {
         let tip = ability_tip(game, id);
         match &res {
-            Ok(()) => ui.tip(&tip),
-            Err(e) => ui.tip_err(&tip, &text::error_text(e)),
+            Ok(()) => ui.tip(r, &tip),
+            Err(e) => ui.tip_err(r, &tip, &text::error_text(e)),
         }
     }
     if (clicked || key) && res.is_ok() {
@@ -131,8 +131,8 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     if ui.hovered(r) {
         let tip = format!("Play Dumb (P)\n{}", text::play_dumb_text());
         match &res {
-            Ok(()) => ui.tip(&tip),
-            Err(e) => ui.tip_err(&tip, &text::error_text(e)),
+            Ok(()) => ui.tip(r, &tip),
+            Err(e) => ui.tip_err(r, &tip, &text::error_text(e)),
         }
     }
     if (clicked || ui.input.key(KeyCode::P)) && res.is_ok() {
@@ -215,14 +215,14 @@ pub fn targeting(ui: &mut Ui, st: &mut UiState, game: &mut Game, map: &MapView) 
             let action = Action::UseAbility { ability: id, target: *tg };
             match game.can_apply(&action) {
                 Ok(()) => {
-                    ui.tip(&head);
+                    ui.tip_map(&head, None);
                     if ui.input.left_pressed && game.apply(action).is_ok() {
                         st.armed = None;
                     }
                 }
-                Err(e) => ui.tip_err(&head, &text::error_text(&e)),
+                Err(e) => ui.tip_map(&head, Some(&text::error_text(&e))),
             }
         }
-        None => ui.tip_err(&head, hint),
+        None => ui.tip_map(&head, Some(hint)),
     }
 }

@@ -39,7 +39,7 @@ fn card_frame(ui: &Ui, r: Rect, dim: f32, line: Color) {
 fn card_button(ui: &mut Ui, r: Rect, label: &str, enabled: bool, why: &str) -> bool {
     let clicked = ui.button_ex(r, label, BODY, enabled, false);
     if !enabled && ui.hovered(r) {
-        ui.tip_err(label, why);
+        ui.tip_err(r, label, why);
     }
     clicked
 }
@@ -143,6 +143,12 @@ pub fn draw_card(card: Card, ui: &mut Ui, st: &UiState, game: &Game) -> Option<C
                 ui.text(name, col_x, row_y, DENSE, t.dim);
                 ui.text_right(value, col_x + 240.0, row_y, BODY, t.text);
             }
+            // What ended the run and the one thing to try, in the gap above the buttons.
+            let cause = text::end_cause(s.outcome);
+            if !cause.is_empty() {
+                let cy = ((y + 86.0 + left.y) * 0.5 + 9.0).round();
+                ui.text_center(cause, cx, cy, DENSE, t.gold);
+            }
             let mut out = None;
             if card_button(ui, left, text::BTN_NEW_RUN, true, "") {
                 out = Some(CardAction::NewRun);
@@ -226,7 +232,8 @@ impl Hints {
                 Some(u) => map.unit_pos(u, st.lerp, ui.time),
                 None => s.pending_sorties.first().map_or(map.node_pos(CORE), |p| map.node_pos(p.origin)),
             },
-            4 => vec2(L::TOP_SUSPICION.x + L::TOP_SUSPICION.w * 0.5, L::TOP.h + 24.0),
+            // The Suspicion meter itself, in the top bar.
+            4 => vec2(L::TOP_SUSPICION.x + L::TOP_SUSPICION.w * 0.5, 30.0),
             5 if st.tab == Tab::Research => side(L::SIDE_BODY.y + 60.0),
             5 => vec2(L::SIDE_TABS.x + 150.0, L::SIDE_TABS.y + L::SIDE_TABS.h),
             _ => NODES
@@ -237,7 +244,7 @@ impl Hints {
         }
     }
 
-    pub fn draw(&mut self, ui: &Ui, st: &UiState, game: &Game, map: &MapView) {
+    pub fn draw(&mut self, ui: &mut Ui, st: &UiState, game: &Game, map: &MapView) {
         let Some(hint) = self.pick(st, game, ui.dt) else {
             self.shown = None;
             return;
@@ -255,7 +262,8 @@ impl Hints {
         // The callout sits inside the map, pulled from its target toward the middle.
         let mid = area.center();
         let pull = (mid - target).normalize_or_zero();
-        let pull = if pull == Vec2::ZERO { vec2(0.0, 1.0) } else { pull };
+        // A target above the map (the top bar) gets the callout straight below it.
+        let pull = if pull == Vec2::ZERO || target.y < area.y { vec2(0.0, 1.0) } else { pull };
         let centre = target + vec2(pull.x * 230.0, pull.y * 110.0);
         let x = (centre.x - W * 0.5).clamp(area.x + 16.0, area.x + area.w - W - 16.0).round();
         let mut y = (centre.y - h * 0.5).clamp(area.y + 30.0, area.y + area.h - h - 16.0).round();
@@ -263,6 +271,8 @@ impl Hints {
             y = if target.y + 44.0 + h < area.y + area.h { target.y + 44.0 } else { target.y - 44.0 - h };
         }
         let b = Rect::new(x, y, W, h);
+        // The tooltip of whatever is under the cursor keeps clear of the callout.
+        ui.tip_avoid = Some(Rect::new(b.x - 4.0, b.y - 4.0, b.w + 8.0, b.h + 8.0));
         // Arrow from the nearest point of the box to just short of the target.
         let from = vec2(target.x.clamp(b.x, b.x + b.w), target.y.clamp(b.y, b.y + b.h));
         let d = (target - from).normalize_or_zero();

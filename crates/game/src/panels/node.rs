@@ -70,7 +70,7 @@ fn owned(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId, ns: &NodeSta
     ui.text_in(&format!("Integrity {:.0} / {:.0}", ns.integrity.max(0.0), max), bar, SMALL, t.text);
     if ui.hovered(bar) {
         let regen = if def.kind == NodeKind::Core { TUNING.core_regen } else { TUNING.regen };
-        ui.tip(&format!(
+        ui.tip(bar, &format!(
             "Integrity {:.1} / {:.0}\nRegenerates {}/s after {} without damage. At 0 the node is {}.",
             ns.integrity.max(0.0),
             max,
@@ -110,8 +110,9 @@ fn owned(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId, ns: &NodeSta
                 ui.text(&fit(ui, &format!("{} L{}", bdef.name, b.level), BODY, 160.0), x + 34.0, y + 22.0, BODY, t.text);
                 let effect = text::building_effect(b.kind, b.level, game.building_output(n, i8), game.defence_dps(n, i8), game.defence_range(n, i8));
                 ui.text(&fit(ui, &effect, DENSE, 160.0), x + 34.0, y + 41.0, DENSE, if ns.injunction { t.dim } else { col });
-                if ui.hovered(Rect::new(x, y, 196.0, 56.0)) {
-                    ui.tip(&format!("{} level {}\n{}\nNow: {}", bdef.name, b.level, text::building_text(b.kind), effect));
+                let card = Rect::new(x, y, 196.0, 56.0);
+                if ui.hovered(card) {
+                    ui.tip(card, &format!("{} level {}\n{}\nNow: {}", bdef.name, b.level, text::building_text(b.kind), effect));
                 }
                 let (label, tip) = match game.upgrade_price(n, i8) {
                     Some(p) => (format!("Upgrade to L{}: {} F", b.level + 1, fmt_price(p)), format!("Upgrade {}\nRaises it to level {} for {} Funds. Level 2 needs research R2, level 3 needs R4.", bdef.name, b.level + 1, fmt_price(p))),
@@ -155,7 +156,7 @@ fn owned(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId, ns: &NodeSta
                     st.open_slot = Some((n, i8));
                 }
                 if ui.hovered(br) {
-                    ui.tip("Empty slot\nShows the buildings this slot can take.");
+                    ui.tip(br, "Empty slot\nShows the buildings this slot can take.");
                 }
                 y += 28.0;
             }
@@ -227,7 +228,7 @@ fn hostile(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId) {
             st.sel_faction = f;
         }
         if ui.hovered(br) {
-            ui.tip("Open HUMANS\nOperations, Grip and the Takeover for this faction.");
+            ui.tip(br, "Open HUMANS\nOperations, Grip and the Takeover for this faction.");
         }
     } else if let Some(rv) = def.rival {
         let rd = &RIVALS[rv.index()];
@@ -244,7 +245,7 @@ fn hostile(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId) {
             st.sel_rival = rv;
         }
         if ui.hovered(br) {
-            ui.tip("Open RIVALS\nThe suborning pipeline for this rival AI.");
+            ui.tip(br, "Open RIVALS\nThe suborning pipeline for this rival AI.");
         }
     }
 }

@@ -142,7 +142,7 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
         }
     }
     if let Some(tip) = tip {
-        ui.tip(&tip);
+        ui.tip(L::THREAT, &tip);
     }
     if let (Some((node, owned, tab)), true) = (jump, ui.input.left_pressed) {
         tracker::select(st, node, owned, ui.time);

@@ -14,6 +14,7 @@ use std::f32::consts::TAU;
 const CORE: NodeId = NodeId(0);
 const CAP: usize = 96;
 const BANNER_LIFE: f32 = 2.8;
+const NOTE_LIFE: f32 = 2.4;
 const METER: Rect = Rect { x: 708.0, y: 8.0, w: 212.0, h: 12.0 };
 
 /// Where an effect sits. Map anchors follow the camera; they are resolved when drawn.
@@ -131,6 +132,8 @@ pub struct Fx {
     seed: f32,
     /// Bridgehead and Stronghold of the running Takeover, kept so its failure can snap the beam.
     takeover_line: Option<(NodeId, NodeId)>,
+    /// Text, success and birth time of the Save / Load note.
+    note: Option<(String, bool, f64)>,
 }
 
 fn readout(r: Resource) -> Vec2 {
@@ -178,6 +181,7 @@ impl Fx {
             shake: None,
             seed: 0.0,
             takeover_line: None,
+            note: None,
         }
     }
 
@@ -226,14 +230,9 @@ impl Fx {
         self.bubbles.push(Bubble { node: RIVALS[rival.index()].lab, lines, w, col: ui.theme.rival(rival), t0: ui.time });
     }
 
-    /// A short note beside the Save and Load buttons.
+    /// The Save / Load note: a chip in the bottom-right corner of the map, where no panel text is.
     pub fn note(&mut self, ui: &Ui, text: &str, good: bool) {
-        let col = if good { ui.theme.good } else { ui.theme.danger };
-        let at = vec2(1272.0 - ui.measure(text, DENSE) * 0.5, 96.0);
-        self.floaters.retain(|f| !matches!(f.at, At::Screen(p) if p.y == at.y && p.x > 1100.0));
-        let f = self.floater(ui, At::Screen(at), text.to_owned(), col);
-        f.life = 2.2;
-        f.fly = Some(at - vec2(0.0, 6.0));
+        self.note = Some((text.to_owned(), good, ui.time));
     }
     /// A longer notice in the middle of the map.
     pub fn notice(&mut self, ui: &Ui, text: &str) {
@@ -352,6 +351,8 @@ impl Fx {
                         self.flash(now, METER, alpha(col, 0.7), 0.5);
                     }
                 }
+                // The Mandate pins the meter; that is not a vote and gets no stamp.
+                V::BandChanged { .. } if s.mandate.is_some() => {}
                 V::BandChanged { band } => {
                     self.stamp(ui, At::Screen(vec2(METER.x + METER.w * 0.5, 104.0)), text::band_name(*band), t.suspicion(s.suspicion));
                     self.flash(now, L::TOP_SUSPICION, alpha(t.suspicion(s.suspicion), 0.45), 0.9);
@@ -490,6 +491,7 @@ impl Fx {
                 }
                 V::CoreAlarm { on: true } => {
                     self.ring(now, At::Node(CORE), 14.0, 80.0, t.danger, 0.9);
+                    self.ring(now + 0.25, At::Node(CORE), 14.0, 80.0, t.danger, 0.9);
                     self.shake(now, 2.0, 0.3);
                 }
                 _ => {}
@@ -604,7 +606,10 @@ impl Fx {
         // State-driven dressing: these read the state, so they survive a load.
         if st.core_alarm {
             let pulse = 0.5 + 0.5 * (time * 6.0).sin();
-            draw_circle_lines(core.x, core.y, (24.0 + 5.0 * pulse) * gs, 2.5, alpha(t.danger, 0.4 + 0.5 * pulse));
+            draw_circle_lines(core.x, core.y, (24.0 + 5.0 * pulse) * gs, 4.0, alpha(t.danger, 0.55 + 0.45 * pulse));
+            // A second ring runs outward so the alarm reads from across the map.
+            let out = (time * 0.9).fract();
+            draw_circle_lines(core.x, core.y, (30.0 + 34.0 * out) * gs, 2.5, alpha(t.danger, 0.8 * (1.0 - out)));
         }
         if s.play_dumb.ticks_left > 0 {
             draw_circle(core.x, core.y, 17.0 * gs, alpha(t.bg, 0.72));
@@ -726,7 +731,7 @@ impl Fx {
             draw_rectangle_lines(chip.x, chip.y, chip.w, chip.h, 1.0, t.text);
             ui.text(&label, chip.x + 8.0, chip.y + 13.0, SMALL, t.text);
             if ui.hovered(chip) {
-                ui.tip(&format!("{}\n{}", text::headline_name(m.headline), sim::content::HEADLINES[m.headline.index()].text));
+                ui.tip(chip, &format!("{}\n{}", text::headline_name(m.headline), sim::content::HEADLINES[m.headline.index()].text));
             }
         }
 
@@ -758,20 +763,31 @@ impl Fx {
             ui.text(&f.text, x, c.y.round(), DENSE, alpha(f.col, a));
         }
 
+        if let Some((label, good, t0)) = &self.note {
+            let age = (ui.time - t0) as f32;
+            let a = ((NOTE_LIFE - age) / 0.4).clamp(0.0, 1.0);
+            if a > 0.0 {
+                let col = if *good { t.good } else { t.danger };
+                let w = ui.measure(label, DENSE) + 20.0;
+                let chip = Rect::new(L::MAP.x + L::MAP.w - w - 8.0, L::MAP.y + L::MAP.h - 32.0, w, 24.0);
+                draw_rectangle(chip.x, chip.y, chip.w, chip.h, alpha(lerp_color(t.panel, t.black, 0.5), a));
+                draw_rectangle_lines(chip.x, chip.y, chip.w, chip.h, 2.0, alpha(col, a));
+                ui.text_in(label, chip, DENSE, alpha(col, a));
+            }
+        }
+
+        // The banner fades in and out inside the map, in a band under the tracker that leaves the Core clear.
         if let Some(b) = self.banners.iter().find(|b| ui.time >= b.t0) {
             let age = (ui.time - b.t0) as f32;
-            let sweep = (age / 0.3).min(1.0);
-            let a = ((BANNER_LIFE - age) / 0.5).clamp(0.0, 1.0);
-            let (y, h) = (L::MAP.y + 200.0, 84.0);
-            let w = L::W * (1.0 - (1.0 - sweep) * (1.0 - sweep));
-            draw_rectangle(0.0, y, w, h, alpha(t.black, 0.82 * a));
-            draw_rectangle(0.0, y, w, 3.0, alpha(b.col, a));
-            draw_rectangle(0.0, y + h - 3.0, w, 3.0, alpha(b.col, a));
-            if sweep >= 1.0 {
-                let ta = a * ((age - 0.3) / 0.2).clamp(0.0, 1.0);
-                ui.text_center(&b.text, L::W * 0.5, y + 44.0, BANNER, alpha(b.col, ta));
-                ui.text_center(&b.sub, L::W * 0.5, y + 68.0, BODY, alpha(t.text, ta));
-            }
+            let a = (age / 0.25).min(1.0) * ((BANNER_LIFE - age) / 0.5).clamp(0.0, 1.0);
+            let m = L::MAP;
+            let (y, h) = (L::TRACKER.y + L::TRACKER.h + 30.0, 80.0);
+            draw_rectangle(m.x, y, m.w, h, alpha(t.black, 0.86 * a));
+            draw_rectangle(m.x, y, m.w, 3.0, alpha(b.col, a));
+            draw_rectangle(m.x, y + h - 3.0, m.w, 3.0, alpha(b.col, a));
+            let cx = m.x + m.w * 0.5;
+            ui.text_center(&b.text, cx, y + 42.0, BANNER, alpha(b.col, a));
+            ui.text_center(&b.sub, cx, y + 66.0, BODY, alpha(t.text, a));
         }
     }
 }

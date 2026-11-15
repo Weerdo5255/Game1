@@ -66,10 +66,10 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
             st.hover_tech = Some(def.id);
             let tip = format!("{}\n{}\nCost {} Compute, paid up front. Takes {}s.", text::tech_label(def.id), def.text, fmt_price(def.cost), def.secs);
             match (&res, status) {
-                (_, TechStatus::Done) => ui.tip(&format!("{tip}\nResearched.")),
-                (_, TechStatus::InProgress { secs_left }) => ui.tip(&format!("{tip}\nIn progress: {} left.", fmt_secs(secs_left))),
-                (Ok(()), _) => ui.tip(&tip),
-                (Err(e), _) => ui.tip_err(&tip, &text::error_text(e)),
+                (_, TechStatus::Done) => ui.tip(cell, &format!("{tip}\nResearched.")),
+                (_, TechStatus::InProgress { secs_left }) => ui.tip(cell, &format!("{tip}\nIn progress: {} left.", fmt_secs(secs_left))),
+                (Ok(()), _) => ui.tip(cell, &tip),
+                (Err(e), _) => ui.tip_err(cell, &tip, &text::error_text(e)),
             }
             if ui.input.left_pressed && res.is_ok() {
                 let _ = game.apply(action);

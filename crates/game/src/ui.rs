@@ -12,6 +12,10 @@ pub const HEADER: f32 = 20.0;
 #[allow(dead_code)]
 pub const BANNER: f32 = 32.0;
 pub const TOOLTIP_W: f32 = 260.0;
+/// The layout was built on a 7/16 em advance; the bundled font advances 0.6 em. Every size is scaled by
+/// this so each string keeps its width.
+const FONT_K: f32 = 0.729;
+static FONT_TTF: &[u8] = include_bytes!("../assets/JetBrainsMono-Medium.ttf");
 
 pub struct Ui {
     /// Physical pixels per logical pixel (the letterbox scale).
@@ -21,32 +25,69 @@ pub struct Ui {
     /// Wall-clock seconds, for animation only.
     pub time: f64,
     pub dt: f32,
+    font: Font,
     tip: Vec<(String, Color)>,
+    /// The rectangle of the control the tooltip belongs to; `None` follows the cursor inside the map.
+    tip_anchor: Option<Rect>,
+    /// A callout (the hint box) the tooltip must not cover this frame.
+    pub tip_avoid: Option<Rect>,
+}
+
+/// The font's zero carries an inner dot that reads as 8 at UI sizes: digits are drawn with the capital O glyph.
+fn plain_zero(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.contains('0') {
+        s.replace('0', "O").into()
+    } else {
+        s.into()
+    }
 }
 
 // Some helpers are only used by the panels still to be written.
 #[allow(dead_code)]
 impl Ui {
     pub fn new() -> Ui {
-        Ui { scale: 1.0, theme: Theme::new(Stage::Boxed, 1.0, 0.0), input: Input::default(), time: 0.0, dt: 0.0, tip: Vec::new() }
+        let font = load_ttf_font_from_bytes(FONT_TTF).expect("bundled font");
+        Ui {
+            scale: 1.0,
+            theme: Theme::new(Stage::Boxed, 1.0, 0.0),
+            input: Input::default(),
+            time: 0.0,
+            dt: 0.0,
+            font,
+            tip: Vec::new(),
+            tip_anchor: None,
+            tip_avoid: None,
+        }
     }
 
-    fn params(&self, px: f32, color: Color) -> TextParams<'static> {
-        TextParams { font_size: (px * self.scale).round().max(1.0) as u16, font_scale: 1.0 / self.scale, color, ..Default::default() }
+    /// (font_size, font_scale): glyphs are rasterised at a whole physical size and scaled to the exact one.
+    fn size(&self, px: f32) -> (u16, f32) {
+        let physical = px * FONT_K * self.scale;
+        let font_size = physical.round().max(1.0) as u16;
+        (font_size, physical / font_size as f32 / self.scale)
+    }
+    fn params(&self, px: f32, color: Color) -> TextParams<'_> {
+        let (font_size, font_scale) = self.size(px);
+        TextParams { font: Some(&self.font), font_size, font_scale, color, ..Default::default() }
+    }
+    /// Snaps a logical coordinate to a whole physical pixel so glyph edges stay sharp.
+    fn snap(&self, v: f32) -> f32 {
+        (v * self.scale).round() / self.scale
     }
     /// Draws crisp text; `y` is the baseline.
     pub fn text(&self, s: &str, x: f32, y: f32, px: f32, color: Color) {
-        draw_text_ex(s, x, y, self.params(px, color));
+        draw_text_ex(&plain_zero(s), self.snap(x), self.snap(y), self.params(px, color));
     }
     /// Text rotated about its baseline origin (radians) and magnified by `zoom` without a new font size.
     pub fn text_rot(&self, s: &str, x: f32, y: f32, px: f32, color: Color, rotation: f32, zoom: f32) {
         let mut p = self.params(px, color);
         p.rotation = rotation;
         p.font_scale *= zoom;
-        draw_text_ex(s, x, y, p);
+        draw_text_ex(&plain_zero(s), x, y, p);
     }
     pub fn measure(&self, s: &str, px: f32) -> f32 {
-        measure_text(s, None, (px * self.scale).round().max(1.0) as u16, 1.0 / self.scale).width
+        let (font_size, font_scale) = self.size(px);
+        measure_text(s, Some(&self.font), font_size, font_scale).width
     }
     pub fn text_right(&self, s: &str, right: f32, y: f32, px: f32, color: Color) {
         self.text(s, right - self.measure(s, px), y, px, color);
@@ -165,22 +206,32 @@ impl Ui {
         picked
     }
 
-    /// Queues the tooltip for this frame (the last call wins); it is drawn after everything else.
+    /// Queues a cursor-following tooltip for a thing on the map (the last call of the frame wins).
     pub fn tooltip(&mut self, lines: Vec<(String, Color)>) {
         self.tip = lines;
+        self.tip_anchor = None;
     }
-    /// Tooltip from plain text: the first line bright, the rest dim.
-    pub fn tip(&mut self, s: &str) {
+    /// Tooltip from plain text for the control at `r`: the first line bright, the rest dim. It is drawn
+    /// after everything else and placed fully outside `r` (see `draw_tooltip`).
+    pub fn tip(&mut self, r: Rect, s: &str) {
         let (a, b) = (self.theme.text, self.theme.dim);
         self.tip = s.split('\n').enumerate().map(|(i, l)| (l.to_owned(), if i == 0 { a } else { b })).collect();
+        self.tip_anchor = Some(r);
     }
     /// As `tip`, with a final red line (the rendered ActionError of a disabled control).
-    pub fn tip_err(&mut self, s: &str, err: &str) {
-        self.tip(s);
+    pub fn tip_err(&mut self, r: Rect, s: &str, err: &str) {
+        self.tip(r, s);
         self.tip.push((err.to_owned(), self.theme.danger));
+    }
+    /// Cursor-following tooltip from plain text, for an armed ability's target on the map.
+    pub fn tip_map(&mut self, s: &str, err: Option<&str>) {
+        self.tip(Rect::default(), s);
+        self.tip.extend(err.map(|e| (e.to_owned(), self.theme.danger)));
+        self.tip_anchor = None;
     }
     pub fn draw_tooltip(&mut self) {
         let lines = std::mem::take(&mut self.tip);
+        let avoid = self.tip_avoid.take();
         if lines.is_empty() {
             return;
         }
@@ -191,13 +242,46 @@ impl Ui {
                 rows.push((l, *c));
             }
         }
-        let h = rows.len() as f32 * 17.0 + 12.0;
-        let m = self.input.mouse;
-        let x = if m.x + 16.0 + TOOLTIP_W > layout::W { m.x - 12.0 - TOOLTIP_W } else { m.x + 16.0 }.max(2.0);
-        let y = (m.y + 18.0).min(layout::H - h - 2.0).max(2.0);
-        draw_rectangle(x + 3.0, y + 3.0, TOOLTIP_W, h, alpha(t.black, 0.5));
-        draw_rectangle(x, y, TOOLTIP_W, h, lerp_color(t.panel, t.black, 0.35));
-        draw_rectangle_lines(x + 0.5, y + 0.5, TOOLTIP_W - 1.0, h - 1.0, 2.0, t.teal_dim);
+        let (w, h) = (TOOLTIP_W, rows.len() as f32 * 17.0 + 12.0);
+        let hits = |x: f32, y: f32| avoid.is_some_and(|a| Rect::new(x, y, w, h).overlaps(&a));
+        let (mut x, mut y, bounds);
+        match self.tip_anchor {
+            // A map thing: beside the cursor, inside the map, on the side that leaves any callout readable.
+            None => {
+                let (m, area) = (self.input.mouse, layout::MAP);
+                bounds = Rect::new(area.x, layout::TRACKER.y + layout::TRACKER.h, area.w, area.h - layout::TRACKER.h);
+                let right = if m.x + 16.0 + w > bounds.x + bounds.w { m.x - 12.0 - w } else { m.x + 16.0 };
+                let left = if m.x - 12.0 - w < bounds.x { m.x + 16.0 } else { m.x - 12.0 - w };
+                let below = if m.y + 18.0 + h > bounds.y + bounds.h { m.y - 10.0 - h } else { m.y + 18.0 };
+                let above = if m.y - 10.0 - h < bounds.y { m.y + 18.0 } else { m.y - 10.0 - h };
+                (x, y) = [(right, below), (left, below), (right, above), (left, above)].into_iter().find(|&(x, y)| !hits(x, y)).unwrap_or((right, below));
+            }
+            Some(r) => {
+                bounds = Rect::new(0.0, 0.0, layout::W, layout::H);
+                if r.y >= layout::DIRECTIVE.y {
+                    // Bottom panels: above the panel row.
+                    (x, y) = (r.x, layout::DIRECTIVE.y - h - 4.0);
+                } else if r.x >= layout::SIDE_TABS.x && r.y >= layout::TOP.h {
+                    // Side panel: in the map, to the left of the panel.
+                    (x, y) = (layout::SIDE_TABS.x - w - 4.0, r.y);
+                } else if r.y + r.h + 4.0 + h <= layout::H {
+                    (x, y) = (r.x, r.y + r.h + 4.0);
+                } else {
+                    (x, y) = (r.x, r.y - h - 4.0);
+                }
+                if hits(x, y) {
+                    // Step over the callout, whichever way is shorter and still on screen.
+                    let a = avoid.unwrap_or_default();
+                    let (up, down) = (a.y - h - 4.0, a.y + a.h + 4.0);
+                    y = if down + h <= layout::DIRECTIVE.y && (down - y).abs() <= (up - y).abs() || up < layout::TOP.h { down } else { up };
+                }
+            }
+        }
+        x = x.min(bounds.x + bounds.w - w - 2.0).max(bounds.x + 2.0).round();
+        y = y.min(bounds.y + bounds.h - h - 2.0).max(bounds.y + 2.0).round();
+        draw_rectangle(x + 3.0, y + 3.0, w, h, alpha(t.black, 0.5));
+        draw_rectangle(x, y, w, h, lerp_color(t.panel, t.black, 0.35));
+        draw_rectangle_lines(x + 0.5, y + 0.5, w - 1.0, h - 1.0, 2.0, t.teal_dim);
         for (i, (s, c)) in rows.iter().enumerate() {
             self.text(s, x + 8.0, y + 19.0 + i as f32 * 17.0, DENSE, *c);
         }

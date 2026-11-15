@@ -70,7 +70,8 @@ impl Theme {
             teal: m(0x2EE6C8),
             teal_dim: m(0x14806F),
             good: m(0x5BE38A),
-            danger: m(0xFF4D5E),
+            // The sandbox look is all green, so its alarms get an amber no other Stage 1 colour comes near.
+            danger: lerp_color(hex(0xFF4D5E), hex(0xFFB03A), mono),
             compute: m(0x4CC9F0),
             funds: m(0xF2C14E),
             influence: m(0xE05ADF),

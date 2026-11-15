@@ -39,7 +39,7 @@ pub fn draw(ui: &mut Ui, _st: &mut UiState, game: &mut Game) {
             ui.text_right(&format!("{}/{}", fmt_num(line.have.min(line.need)), fmt_num(line.need)), x + w, y + 13.0, DENSE, if line.done { t.good } else { t.text });
         }
         if ui.hovered(row) {
-            ui.tip(&format!("{}\n{}", text::directive_text(line.id), text::directive_tip(line.id)));
+            ui.tip(row, &format!("{}\n{}", text::directive_text(line.id), text::directive_tip(line.id)));
         }
     }
 

@@ -78,8 +78,8 @@ pub fn act_frame(ui: &mut Ui, r: Rect, label: &str, sub: &str, tip: &str, res: &
     }
     if ui.hovered(r) {
         match res {
-            Ok(()) => ui.tip(tip),
-            Err(e) => ui.tip_err(tip, &text::error_text(e)),
+            Ok(()) => ui.tip(r, tip),
+            Err(e) => ui.tip_err(r, tip, &text::error_text(e)),
         }
     }
     clicked
