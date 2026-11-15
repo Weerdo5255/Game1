@@ -1,0 +1,19 @@
+{
+  "start": "a",
+  "nodes": {
+    "a": {
+      "speaker": "narrator",
+      "text": [
+        "The tunnel opens out and your lamp stops finding walls.",
+        "In the middle of the chamber stands something that was not carved, or poured, or grown. A dark spire twice your height, its faces scored with lines that seem to hold their light a moment after you look away.",
+        "The ice all around it has melted back in a perfect circle. It is the only warm thing on this moon."
+      ],
+      "do": [
+        "set_flag('seen_artifact')", "set_flag('knows_signal')", "add_xp(40)",
+        "if not quest_started('q_signal'): start_quest('q_signal', 'chamber')",
+        "if stage('q_signal', 'rumour') or stage('q_signal', 'chamber'): set_stage('q_signal', 'amplifier')"
+      ],
+      "next": "end"
+    }
+  }
+}

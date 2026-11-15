@@ -1,0 +1,25 @@
+{
+  "start": [
+    {"if": "flag('osei_confessed') or rel('osei') >= 35", "goto": "drafts"},
+    {"goto": "locked"}
+  ],
+  "nodes": {
+    "locked": {
+      "speaker": "narrator",
+      "text": "ADMINISTRATOR'S TERMINAL. Locked to I. Osei.",
+      "choices": [
+        {"text": "Break the lock. You are the auditor; arguably it is your job.", "skill": ["tech", 6], "do": ["add_rel(-10, 'osei')"], "goto": "drafts"},
+        {"text": "Leave it.", "goto": "end"}
+      ]
+    },
+    "drafts": {
+      "speaker": "narrator",
+      "text": [
+        "A folder of unsent messages, all addressed to the Combine board, all beginning the same way: 'I have to report a discovery beneath the Ithaca dig...' The oldest is eight months old. None was ever sent.",
+        "The newest is three lines long. 'If I tell them, they take it and us with it. If I do not, I am lying to the people who pay for our air. There is a third option in the charter, Clause Nine, and I am too tired to be that brave.'"
+      ],
+      "do": ["set_flag('knows_signal')", "set_flag('read_osei_drafts')", "if not quest_started('q_signal'): start_quest('q_signal')", "add_xp(30)"],
+      "next": "end"
+    }
+  }
+}

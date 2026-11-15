@@ -1,0 +1,79 @@
+{
+  "id": "bram",
+  "name": "Bram Kowal",
+  "title": "Chief Engineer",
+  "role": "engineer",
+  "faction": "engineering",
+  "bio": "Has kept a forty-year-old reactor running on scavenged parts and stubbornness. Talks to it. Does not talk much to anyone else.",
+  "appearance": {
+    "body": "human",
+    "skin": "olive",
+    "hair": "cap",
+    "hair_color": "grey",
+    "outfit": "jumpsuit",
+    "primary": "orange",
+    "secondary": "slate",
+    "legs": "slate",
+    "extras": [
+      "beard"
+    ]
+  },
+  "attrs": {
+    "body": 6,
+    "dexterity": 8,
+    "intellect": 7,
+    "presence": 4,
+    "resolve": 7
+  },
+  "skills": {
+    "engineering": 6,
+    "tech": 5,
+    "athletics": 3,
+    "science": 2
+  },
+  "access": [
+    "crew",
+    "engineering"
+  ],
+  "spawn": {
+    "map": "engineering",
+    "x": 6,
+    "y": 11,
+    "facing": "up"
+  },
+  "home": {
+    "bed": "bed_bram"
+  },
+  "job": {
+    "system": "reactor",
+    "duty": "maintain",
+    "maintain": [
+      "reactor",
+      "life_support",
+      "water_reclaim",
+      "grid",
+      "fabricator"
+    ],
+    "restock": [
+      "reactor"
+    ]
+  },
+  "schedule": "early",
+  "inventory": {
+    "keycard_eng": 1,
+    "multitool": 1
+  },
+  "equipped": {
+    "tool": "multitool"
+  },
+  "credits": 60,
+  "relations": {
+    "player": 0,
+    "lin": -30,
+    "pip": 30,
+    "osei": 20,
+    "dex": -15
+  },
+  "dialogue": "bram",
+  "blip": "blip_low"
+}

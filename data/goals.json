@@ -1,0 +1,80 @@
+{
+  "_comment": "Reusable NPC goal templates. '$name' placeholders are filled from the 'args' of whoever uses the template (a character file or the add_goal() script function). Step verbs are documented in game/sim/ai.py.",
+
+  "stockpile": {
+    "desc": "Stockpile $label",
+    "priority": 48,
+    "steps": [
+      {"do": "acquire", "item": "$item", "count": "$count", "steal": true, "exclude": ["$stash"]},
+      {"do": "deliver", "item": "$item", "to": "$stash"}
+    ]
+  },
+  "fetch_for_player": {
+    "desc": "Fetch $label",
+    "priority": 66,
+    "steps": [
+      {"do": "acquire", "item": "$item", "count": "$count"},
+      {"do": "talk", "char": "player", "node": "$node"}
+    ]
+  },
+  "go_and_wait": {
+    "desc": "$label",
+    "priority": 70,
+    "steps": [
+      {"do": "goto", "object": "$marker"},
+      {"do": "wait", "until": "$until", "label": "$label"}
+    ]
+  },
+  "confront_player": {
+    "desc": "Have a word with the auditor",
+    "priority": 78,
+    "steps": [
+      {"do": "talk", "char": "player", "node": "$node"}
+    ]
+  },
+  "arrest": {
+    "desc": "Arrest $label",
+    "priority": 88,
+    "log": true,
+    "steps": [
+      {"do": "talk", "char": "$target", "minutes": 4, "line": "You're coming with me.", "optional": false},
+      {"do": "run", "script": ["move_npc('$target', 'command', 26, 14)", "set_schedule('$target', 'confined')", "set_flag('$flag')"]},
+      {"do": "goto", "object": "cell_door"},
+      {"do": "run", "script": ["lock('cell_door')"]}
+    ]
+  },
+  "seal_tunnel": {
+    "desc": "Bring the roof down on the chamber",
+    "priority": 84,
+    "log": true,
+    "steps": [
+      {"do": "acquire", "item": "mining_charge", "count": 2, "steal": true},
+      {"do": "goto", "object": "chamber_trigger", "label": "Carrying charges into the tunnels"},
+      {"do": "wait", "minutes": 20, "label": "Setting charges"},
+      {"do": "run", "script": ["emit('tunnel_blown')"]}
+    ]
+  },
+  "repair_comms": {
+    "desc": "Rebuild the comms array",
+    "priority": 58,
+    "log": true,
+    "steps": [
+      {"do": "acquire", "item": "signal_amplifier", "count": 1},
+      {"do": "goto", "system": "comms"},
+      {"do": "run", "script": ["take_item('signal_amplifier', 1, self)", "set_cap('comms', 100)", "repair('comms', 35)"]},
+      {"do": "acquire", "tag": "part", "count": 2, "optional": true},
+      {"do": "repair", "system": "comms", "target": 70, "jury_cap": 70},
+      {"do": "run", "script": ["set_flag('comms_fixed')"]}
+    ]
+  },
+  "flee_station": {
+    "desc": "Slip away on the Magpie",
+    "priority": 92,
+    "log": false,
+    "steps": [
+      {"do": "goto", "object": "magpie", "label": "Heading for the hangar"},
+      {"do": "wait", "minutes": 25, "label": "Running pre-flight on the Magpie"},
+      {"do": "run", "script": ["emit('magpie_launch')"]}
+    ]
+  }
+}

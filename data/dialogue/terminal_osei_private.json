@@ -1,0 +1,10 @@
+{
+  "start": "a",
+  "nodes": {
+    "a": {
+      "speaker": "narrator",
+      "text": "A personal terminal. The screen saver is a photograph of twelve people in thermal suits standing in front of the bore rig, squinting. Eleven years ago, by the stamp. You count four faces you have met.",
+      "next": "end"
+    }
+  }
+}

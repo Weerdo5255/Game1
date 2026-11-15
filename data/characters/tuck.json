@@ -1,0 +1,73 @@
+{
+  "id": "tuck",
+  "name": "Tuck Abara",
+  "title": "Driller",
+  "role": "miner",
+  "faction": "engineering",
+  "bio": "Third-generation ice driller and the last one Ithaca has. It was his bore that broke through into the chamber. He has been hearing it in his sleep ever since.",
+  "appearance": {
+    "body": "human",
+    "skin": "ebony",
+    "hair": "helmet",
+    "hair_color": "black",
+    "outfit": "suit",
+    "primary": "amber",
+    "secondary": "orange",
+    "legs": "amber",
+    "extras": []
+  },
+  "attrs": {
+    "body": 8,
+    "dexterity": 6,
+    "intellect": 5,
+    "presence": 5,
+    "resolve": 4
+  },
+  "skills": {
+    "survival": 7,
+    "athletics": 6,
+    "engineering": 4
+  },
+  "access": [
+    "crew"
+  ],
+  "spawn": {
+    "map": "excavation",
+    "x": 17,
+    "y": 5,
+    "facing": "up"
+  },
+  "home": {
+    "bed": "bed_tuck"
+  },
+  "job": {
+    "system": "drill",
+    "duty": "maintain",
+    "maintain": [
+      "drill"
+    ]
+  },
+  "schedule": "day",
+  "inventory": {
+    "thermal_suit": 1,
+    "stim": 2,
+    "lucky_coin": 1
+  },
+  "equipped": {
+    "suit": "thermal_suit",
+    "accessory": "lucky_coin"
+  },
+  "credits": 40,
+  "needs": {
+    "fatigue": 55
+  },
+  "morale": 42,
+  "relations": {
+    "player": -5,
+    "wren": 35,
+    "lin": -20,
+    "halloran": 15
+  },
+  "dialogue": "tuck",
+  "blip": "blip_low"
+}

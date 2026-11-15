@@ -1,0 +1,95 @@
+{
+  "start": [
+    {"if": "not flag('met_bram')", "goto": "first"},
+    {"goto": "hub"}
+  ],
+  "nodes": {
+    "first": {
+      "text": [
+        "Mind the grating, it is live on the left side. ...You are the auditor. Kowal. I keep the lights on.",
+        "You want the short version? She is a forty-year-old tokamak running at {round(cond('reactor'))} percent on a containment coil I rewound by hand. She needs parts. I have asked for parts. I get forms."
+      ],
+      "do": ["set_flag('met_bram')", "set_flag('inspected_eng')", "start_quest('q_reactor')"],
+      "choices": [
+        {"text": "Who is giving you forms?", "goto": "forms"},
+        {"text": "What happens if the reactor fails?", "goto": "fails"},
+        {"text": "The coil wants re-shimming, not rewinding. Look at the harmonic.", "skill": ["engineering", 5], "once": true, "goto": "shim"}
+      ]
+    },
+    "forms": {
+      "text": [
+        "Marlow. The stores have parts on the shelf and scrap for the fabricator. Every requisition comes back 'pending countersignature'. Meanwhile half my power goes to a laboratory.",
+        "Go and look at the power queue if you do not believe me. The lab sits second. Ahead of water. Ahead of food. The Administrator signed it."
+      ],
+      "do": ["set_flag('knows_lab_priority')"],
+      "next": "hub"
+    },
+    "fails": {
+      "text": "The RTG keeps the scrubbers turning at two-thirds. Everything else stops. No water plant, no grow lamps, no heat. Call it four days before people start dying, and they would be long days.",
+      "next": "hub"
+    },
+    "shim": {
+      "text": "...Huh. You have had your hands inside one of these. Nobody from the Combine has had their hands inside anything. All right. You, I will talk to.",
+      "do": ["add_rel(15)", "add_xp(30)"],
+      "next": "hub"
+    },
+
+    "hub": {
+      "variants": [
+        {"if": "cond('reactor') >= 85", "text": "Hear that? That is what she is supposed to sound like. What do you need?"},
+        {"if": "cond('reactor') < 35", "text": "She is dying on me. Unless you have parts in your pockets, I am busy."},
+        {"if": "wants() != ''", "text": "I need {wants_count()} more {item_name(wants())} and I cannot find any. What?"},
+        {"text": "Auditor. Watch the grating."}
+      ],
+      "choices": [
+        {"text": "Take these spare parts.", "item": ["spare_parts", 1], "goto": "give_parts"},
+        {"text": "How is the reactor holding?", "goto": "status"},
+        {"text": "The Administrator has opened the stores to you.", "if": "flag('stores_open') and not flag('bram_told_stores')", "goto": "stores_open"},
+        {"text": "I have moved the lab down the power queue.", "if": "flag('lab_demoted') and not flag('bram_told_lab')", "goto": "lab_done"},
+        {"text": "What do you make of Dr. Suvari's work?", "goto": "lin"},
+        {"text": "The fuel hopper. How long have we got?", "goto": "fuel"},
+        {"text": "What are you working on?", "goto": "doing"},
+        {"text": "I will let you work.", "goto": "end"}
+      ]
+    },
+    "give_parts": {
+      "text": "Regulator boards. Real ones. ...I will not ask where. She will have these in her by the end of the shift.",
+      "do": ["give_to('bram', 'spare_parts', item_count('spare_parts'))", "add_rel(10)", "if stage('q_reactor', 'parts'): set_stage('q_reactor', 'stabilise')"],
+      "next": "hub"
+    },
+    "status": {
+      "text": "Integrity {round(cond('reactor'))} percent. Output {round(power_supply())} kilowatts against {round(power_demand())} asked for. {'We are browning out; the queue decides who goes dark.' if brownout() else 'For once there is enough to go round.'}",
+      "next": "hub"
+    },
+    "stores_open": {
+      "text": "She did? Over Marlow's countersignature? ...Tell her thank you. No. I will tell her myself. Later. After I have stripped that shelf.",
+      "do": ["set_flag('bram_told_stores')", "add_rel(10)", "if stage('q_reactor', 'parts'): set_stage('q_reactor', 'stabilise')"],
+      "next": "hub"
+    },
+    "lab_done": {
+      "text": "The fabricator is drawing again. First time in a month. Suvari will want your head. I would buy you a drink if Marlow had not sold all of it.",
+      "do": ["set_flag('bram_told_lab')", "add_rel(12)", "add_xp(30)"],
+      "next": "hub"
+    },
+    "lin": {
+      "text": [
+        "She is listening to the ice. Thirty-four kilowatts to listen to ice. I have told the Administrator what I think and I was told it was not my department.",
+        "Something down there has got into her, and into Tuck. I fix machines. I do not know how to fix that."
+      ],
+      "do": ["if not quest_started('q_signal'): start_quest('q_signal')"],
+      "next": "hub"
+    },
+    "fuel": {
+      "text": "{round(container_count('reactor_hopper', 'fuel_cell'))} in the hopper, {round(container_count('stores_fuel', 'fuel_cell'))} in the fuel locker, and each one is about a day. I count them every morning. Lately the count has been coming up short, and I do not make arithmetic mistakes.",
+      "do": ["if not quest_started('q_smuggler'): start_quest('q_smuggler')"],
+      "next": "hub"
+    },
+    "doing": {
+      "variants": [
+        {"if": "goal_text() != ''", "text": "{goal_text()}. Same as every day. {activity()}."},
+        {"text": "Listening to her. You learn more that way than from the board."}
+      ],
+      "next": "hub"
+    }
+  }
+}

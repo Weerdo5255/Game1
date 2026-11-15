@@ -1,0 +1,14 @@
+{
+  "start": "board",
+  "nodes": {
+    "board": {
+      "speaker": "narrator",
+      "text": [
+        "OPERATIONS STATUS BOARD. Reactor {round(cond('reactor'))}% [{sys_status('reactor')}]. Life support {round(cond('life_support'))}% [{sys_status('life_support')}]. Water plant {round(cond('water_reclaim'))}% [{sys_status('water_reclaim')}].",
+        "Hydroponics {round(cond('hydroponics'))}%. Fabricator {round(cond('fabricator'))}%. Bore rig {round(cond('drill'))}%. Comms array {round(cond('comms'))}% [{sys_status('comms')}].",
+        "Bus: {round(power_supply())} kW supplied / {round(power_demand())} kW requested. Crew aboard: see your datapad, CREW page. Details of every system: STATION page."
+      ],
+      "next": "end"
+    }
+  }
+}

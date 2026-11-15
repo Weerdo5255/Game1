@@ -1,0 +1,57 @@
+{
+  "_comment": "Fallback conversation used by any character without a dialogue file of their own - including ones made with the character creator. It leans on script functions so it reacts to whatever the NPC is doing and wants.",
+  "start": [
+    {"if": "talked() == 0", "goto": "first"},
+    {"goto": "hub"}
+  ],
+  "nodes": {
+    "first": {
+      "text": "{name()}, {title()}. You will be the auditor everybody is whispering about.",
+      "next": "hub"
+    },
+    "hub": {
+      "variants": [
+        {"if": "morale() < 30", "text": "Not a good day. Not a good week, if I am honest. What is it?"},
+        {"if": "res('air') < 60", "text": "Is it me, or is the air getting thick? ...What did you want?"},
+        {"if": "brownout()", "text": "Lights keep dipping. You get used to it. You should not have to. Yes?"},
+        {"if": "rel() >= 30", "text": "Good to see you. What do you need?"},
+        {"text": "Something I can do for you?"}
+      ],
+      "choices": [
+        {"text": "What are you working on?", "goto": "doing"},
+        {"text": "Do you need anything?", "goto": "needs"},
+        {"text": "Let me see what you are selling.", "if": "can_trade()", "do": ["open_trade()"], "goto": "hub"},
+        {"text": "How is the station holding up?", "goto": "station"},
+        {"text": "I will let you get on.", "goto": "end"}
+      ]
+    },
+    "doing": {
+      "variants": [
+        {"if": "goal_text() != ''", "text": "{goal_text()}. Right this minute: {activity()}."},
+        {"text": "{activity()}. The usual."}
+      ],
+      "next": "hub"
+    },
+    "needs": {
+      "variants": [
+        {"if": "wants() != ''", "text": "Since you ask: I am short {wants_count()} x {item_name(wants())} and I cannot find any on the whole station."},
+        {"if": "need('hunger', npc) > 70", "text": "A meal. The dispenser has been empty every time I look."},
+        {"if": "need('fatigue', npc) > 75", "text": "Eight hours of sleep and a week off. Failing that, nothing you can carry."},
+        {"text": "Kind of you. No, I am all right."}
+      ],
+      "choices": [
+        {"text": "Here, take this.", "if": "wants() != '' and has_item(wants())", "do": ["give_to(npc, wants(), 1)", "add_rel(8)"], "goto": "thanks"},
+        {"text": "Have a ration on me.", "if": "need('hunger', npc) > 70 and has_item('ration_pack')", "do": ["give_to(npc, 'ration_pack', 1)", "add_rel(8)"], "goto": "thanks"},
+        {"text": "I will keep an eye out.", "goto": "hub"}
+      ]
+    },
+    "thanks": {
+      "text": "That is exactly what I needed. Thank you - I will remember it.",
+      "next": "hub"
+    },
+    "station": {
+      "text": "Reactor at {round(cond('reactor'))} percent, {round(res('water'))} litres in the tanks, air at {round(res('air'))}. {'We have seen worse.' if cond('reactor') >= 60 else 'I have stopped looking at the boards.'}",
+      "next": "hub"
+    }
+  }
+}

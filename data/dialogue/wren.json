@@ -1,0 +1,89 @@
+{
+  "start": [
+    {"if": "not flag('met_wren')", "goto": "first"},
+    {"if": "flag('pump_fixed') and not flag('wren_thanked')", "goto": "thanks"},
+    {"goto": "hub"}
+  ],
+  "nodes": {
+    "first": {
+      "text": [
+        "Careful of the trays - those are tomorrow's dinner. You must be the auditor. Wren. I grow things.",
+        "You want to know if we can feed ourselves. We can. Lamps, seed, labour: all fine. What I do not have is water. The reclamation pump has been bleeding through a dead seal for months, and the tanks are down to {round(res('water'))} litres."
+      ],
+      "do": ["set_flag('met_wren')", "set_flag('inspected_hydro')", "start_quest('q_water')"],
+      "choices": [
+        {"text": "What would it take to fix the pump?", "goto": "seal"},
+        {"text": "How long until the tanks are empty?", "goto": "how_long"}
+      ]
+    },
+    "seal": {
+      "text": [
+        "One seal. A ring of polymer the size of my hand. Bram can pack the housing with ordinary parts but it only ever gets the pump halfway.",
+        "Dex has one; I have seen it in his cage. He says it is 'allocated'. Pip could print one if the fabricator ever got power. And Tuck's bore rig uses the same fitting, though he would have to stop drilling to give it up."
+      ],
+      "next": "hub"
+    },
+    "how_long": {
+      "text": "At this rate? Three days, perhaps four. Then the beds die, and a week after that we are eating paste out of the emergency lockers. Fix the pump and it all stops being a problem.",
+      "next": "seal"
+    },
+
+    "hub": {
+      "variants": [
+        {"if": "res_pct('water') < 12", "text": "The beds are wilting. I am hand-watering with what is left in the lines. Please tell me you have that seal."},
+        {"if": "flag('pump_fixed')", "text": "Listen. No rattle. I had forgotten what quiet sounds like. What can I do for you?"},
+        {"if": "eff('hydroponics') < 0.3", "text": "The lamps keep dropping out. Plants do not understand power queues."},
+        {"text": "Hello again. Mind the trays."}
+      ],
+      "choices": [
+        {"text": "I have a pump seal for you.", "if": "not flag('pump_fixed')", "item": ["pump_seal", 1], "consume": true, "goto": "give_seal"},
+        {"text": "Have you noticed anyone not sleeping?", "if": "stage('q_medical', 'ask_around')", "goto": "stims"},
+        {"text": "What do you make of the others?", "goto": "gossip"},
+        {"text": "Could you spare something fresh?", "if": "not flag('wren_gift')", "goto": "greens"},
+        {"text": "How are the beds?", "goto": "beds"},
+        {"text": "I will leave you to it.", "goto": "end"}
+      ]
+    },
+    "give_seal": {
+      "text": "You - where did - no, I do not care. Give it here. I have had the housing stripped and ready since the spring.",
+      "do": ["pass_time(40)", "set_cap('water_reclaim', 100)", "repair('water_reclaim', 40)", "set_flag('pump_fixed')", "add_rel(20)", "sound('repair')"],
+      "next": "thanks"
+    },
+    "thanks": {
+      "text": [
+        "It is holding. The gauge has stopped falling for the first time since I can remember.",
+        "Here. First cutting from bed three. It is not much. It is the best thing on this moon."
+      ],
+      "do": ["set_flag('wren_thanked')", "give_item('fresh_greens', 3)", "add_morale(6, 'all')"],
+      "next": "end"
+    },
+    "stims": {
+      "text": [
+        "Tuck. It is Tuck. He has been walking the corridor at four in the morning since the bore broke through, and his hands shake when he thinks nobody is looking.",
+        "Be kind to him. He found something down there and it has not let go of him. And if he is getting stims, he is not getting them from Dr. Pell."
+      ],
+      "do": ["set_stage('q_medical', 'tuck')", "set_flag('knows_tuck_stims')", "if not quest_started('q_signal'): start_quest('q_signal')"],
+      "next": "hub"
+    },
+    "gossip": {
+      "text": [
+        "Bram loves that reactor more than he will ever love a person. Pip is a darling. Dr. Pell worries about all of us so he does not have to worry about himself.",
+        "And Dex... my seed deliveries have come up a crate short three times running. Dex says the manifests balance. The manifests always balance. Funny, that."
+      ],
+      "do": ["if not quest_started('q_smuggler'): start_quest('q_smuggler')"],
+      "next": "hub"
+    },
+    "greens": {
+      "variants": [
+        {"if": "rel() >= 15", "text": "For you? Go on, then. Do not tell the others I have favourites."},
+        {"text": "Everybody asks. Ask me again when I know you better."}
+      ],
+      "do": ["if rel() >= 15: give_item('fresh_greens', 1)", "if rel() >= 15: set_flag('wren_gift')"],
+      "next": "hub"
+    },
+    "beds": {
+      "text": "Running at {round(eff('hydroponics') * 100)} percent. When they are happy I put a ration pack in the galley dispenser every hour and a half. When they are not, I put in apologies. There are {round(container_count('galley_dispenser', 'ration_pack'))} packs in the dispenser now.",
+      "next": "hub"
+    }
+  }
+}

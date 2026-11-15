@@ -1,0 +1,50 @@
+{
+  "start": [
+    {"if": "flag('knows_combine_plan')", "goto": "after"},
+    {"if": "flag('comms_fixed') and online('comms')", "goto": "uplink"},
+    {"if": "flag('comms_fixed')", "goto": "no_power"},
+    {"goto": "dead"}
+  ],
+  "nodes": {
+    "dead": {
+      "speaker": "narrator",
+      "text": "TRAFFIC CONSOLE. No carrier. Last successful uplink: 243 days ago. MCS Calypso's Thread due Day 6, 08:00 ({max(0, round(hours_until(6, 8)))} hours)."
+    },
+    "no_power": {
+      "speaker": "narrator",
+      "text": "TRAFFIC CONSOLE. Array rebuilt; transmitter starved. The comms array is not receiving power: move it up the queue at its console in the Comms Room, or shed load elsewhere.",
+      "do": ["if quest_active('q_comms'): set_stage('q_comms', 'power')"]
+    },
+    "uplink": {
+      "speaker": "narrator",
+      "text": [
+        "TRAFFIC CONSOLE. Carrier locked. Rhea relay responding. Eight months of queued traffic begins to scroll.",
+        "Most of it is routine. One packet is not: it is addressed to the master of the Calypso's Thread, and your audit credentials open it."
+      ],
+      "choices": [
+        {"text": "Read it.", "goto": "orders"},
+        {"text": "Leave it sealed.", "goto": "end"}
+      ]
+    },
+    "orders": {
+      "speaker": "narrator",
+      "text": [
+        "'...retrieval team to secure SUBJECT ICE on arrival. The audit is cover and its findings are immaterial. Resident crew to be relocated regardless. Auditor is not cleared for SUBJECT ICE and is not to be briefed.'",
+        "They have known about the chamber all along. You were never sent to decide anything."
+      ],
+      "do": ["set_flag('knows_combine_plan')", "set_flag('knows_signal')", "give_item('combine_orders')", "if quest_active('q_comms'): complete_quest('q_comms')", "add_xp(60)"],
+      "choices": [
+        {"text": "Send a distress call on the open band while the link is up.", "do": ["set_flag('relief_called')", "log('You sent a distress call over the restored comms array.')"], "goto": "sent"},
+        {"text": "Close the channel.", "goto": "end"}
+      ]
+    },
+    "sent": {
+      "speaker": "narrator",
+      "text": "The packet goes out in clear, to anybody with a dish: Ithaca Station, ten souls, in need. Whatever the Combine planned, it is no longer happening quietly."
+    },
+    "after": {
+      "speaker": "narrator",
+      "text": "TRAFFIC CONSOLE. Carrier locked. The decrypted orders are still in your datapad. MCS Calypso's Thread due in {max(0, round(hours_until(6, 8)))} hours."
+    }
+  }
+}

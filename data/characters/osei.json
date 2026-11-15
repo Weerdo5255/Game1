@@ -1,0 +1,66 @@
+{
+  "id": "osei",
+  "name": "Imara Osei",
+  "title": "Station Administrator",
+  "role": "administrator",
+  "faction": "command",
+  "bio": "Eleven years running Ithaca on half the budget she was promised. She has buried two crew here and delivered one. She will say whatever keeps the station alive.",
+  "appearance": {
+    "body": "human",
+    "skin": "brown",
+    "hair": "bob",
+    "hair_color": "black",
+    "outfit": "uniform",
+    "primary": "navy",
+    "secondary": "amber",
+    "legs": "slate",
+    "extras": []
+  },
+  "attrs": {
+    "body": 4,
+    "dexterity": 4,
+    "intellect": 7,
+    "presence": 8,
+    "resolve": 8
+  },
+  "skills": {
+    "persuasion": 7,
+    "intimidation": 4,
+    "tech": 3,
+    "science": 2
+  },
+  "access": [
+    "crew",
+    "command",
+    "security",
+    "stores",
+    "engineering"
+  ],
+  "spawn": {
+    "map": "command",
+    "x": 5,
+    "y": 4,
+    "facing": "down"
+  },
+  "home": {
+    "bed": "bed_osei"
+  },
+  "job": {
+    "region": "admin_office",
+    "label": "Working at her desk"
+  },
+  "schedule": "command",
+  "inventory": {
+    "coffee_bulb": 1
+  },
+  "credits": 200,
+  "relations": {
+    "player": 5,
+    "halloran": 40,
+    "lin": 10,
+    "bram": 25,
+    "dex": -5
+  },
+  "dialogue": "osei",
+  "blip": "blip"
+}

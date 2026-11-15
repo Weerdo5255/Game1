@@ -1,0 +1,28 @@
+{
+  "_comment": "Status effects. The engine applies hungry/starving/tired/exhausted/hypoxia/suffocating/cold/demoralised/inspired/resting by itself (defaults in game/sim/needs.py); entries here override those numbers or add effects for items and scripts.",
+
+  "well_fed": {
+    "name": "Well Fed", "desc": "Real food. Morale improves on its own.",
+    "mods": {"attr.resolve": 1}, "morale": 10
+  },
+  "caffeinated": {
+    "name": "Caffeinated", "desc": "Wide awake, slightly jittery.",
+    "mods": {"skill.tech": 1, "speed": 0.05}
+  },
+  "stimmed": {
+    "name": "Stimmed", "desc": "Borrowed energy. The bill arrives later.",
+    "mods": {"skill.all": 1, "speed": 0.1}, "hp_per_hour": -0.2
+  },
+  "calm": {
+    "name": "Calm", "desc": "The noise in your head has turned down.",
+    "mods": {"attr.resolve": 1}, "morale": 6
+  },
+  "signal_touched": {
+    "name": "Signal-touched", "desc": "A pressure behind the eyes, like a word on the tip of your tongue.",
+    "mods": {"skill.science": 1, "attr.resolve": -1}, "morale": -5, "bad": true
+  },
+  "authority": {
+    "name": "Audit Authority", "desc": "The Administrator has given you the run of the station's control boards.",
+    "mods": {"skill.intimidation": 1}
+  }
+}

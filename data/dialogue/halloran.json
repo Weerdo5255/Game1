@@ -1,0 +1,160 @@
+{
+  "start": [
+    {"if": "stage('q_audit', 'final')", "goto": "final_day"},
+    {"if": "flag('dex_arrested') and not flag('hal_thanked')", "goto": "thanks"},
+    {"goto": "hub"}
+  ],
+  "nodes": {
+    "welcome": {
+      "text": [
+        "Sergeant Halloran. Station security. You will be the auditor.",
+        "So you are the one who decides whether ten people keep their home. About what I expected. They always send somebody who has never been cold."
+      ],
+      "choices": [
+        {"text": "Nothing is decided, Sergeant. I am here to look at the facts.", "do": ["add_rel(6)"], "goto": "welcome_2"},
+        {"text": "Then it is in your interest to make my stay an easy one.", "check": ["intimidation", 12], "pass": "welcome_firm", "fail": "welcome_bristle"},
+        {"text": "Where do I find the Administrator?", "goto": "welcome_2"}
+      ]
+    },
+    "welcome_firm": {
+      "text": "...Fair. I have had officers like you. Mostly the ones who got people home. All right, Auditor.",
+      "do": ["add_rel(8)"], "next": "welcome_2"
+    },
+    "welcome_bristle": {
+      "text": "Do not push me on my own deck. You have a badge and a datapad. I have the brig.",
+      "do": ["add_rel(-8)"], "next": "welcome_2"
+    },
+    "welcome_2": {
+      "text": [
+        "Administrator Osei wants you first. <y>Command Deck</y>: through that door behind me, across the Central Ring, north side.",
+        "Your bunk is in Crew Quarters, east off the Ring, first room. The galley dispenser feeds everybody, so go easy on it. And stay out of the dig unless you enjoy frostbite."
+      ],
+      "next": "end"
+    },
+
+    "hub": {
+      "variants": [
+        {"if": "rel() >= 30", "text": "Auditor. What do you need?"},
+        {"if": "rel() <= -30", "text": "Make it quick."},
+        {"if": "brownout()", "text": "Lights are flickering again. Engineering says it is fine. Engineering always says it is fine. What is it?"},
+        {"text": "Auditor."}
+      ],
+      "choices": [
+        {"text": "Tell me about the station.", "goto": "station"},
+        {"text": "What do you make of the crew?", "goto": "crew"},
+        {"text": "Is anything going missing around here?", "if": "not quest_started('q_smuggler')", "goto": "missing"},
+        {"text": "I have proof about the missing supplies.", "if": "quest_active('q_smuggler') and (has_item('cargo_manifest') or flag('saw_dex_loading')) and not flag('dex_arrested') and not flag('dex_reformed') and present('dex')", "goto": "proof"},
+        {"text": "The amplifier core. I am told you have it.", "if": "flag('knows_amp') and container_count('sec_locker', 'signal_amplifier') > 0", "goto": "amp"},
+        {"text": "Tuck is asking about the mining charges.", "if": "flag('tuck_wants_charges') and container_count('sec_locker', 'mining_charge') > 0", "goto": "charges"},
+        {"text": "What is under the dig, Sergeant?", "if": "flag('knows_signal')", "goto": "dig"},
+        {"text": "That is all.", "goto": "end"}
+      ]
+    },
+    "station": {
+      "text": [
+        "Forty years old. Built for sixty people; there are ten of us and a drone. The Combine stopped sending replacements when the ore assays came back thin.",
+        "Comms have been dead eight months. The supply drone is three months late. The Administrator keeps the lid on. My job is to help her keep it on."
+      ],
+      "next": "hub"
+    },
+    "crew": {
+      "text": [
+        "Kowal keeps the reactor alive. Castellanos keeps us fed. Pell keeps us breathing, mostly. The kid, Anders, thinks a working radio will fix everything.",
+        "Suvari I do not understand and Marlow I understand too well. And Abara... Tuck is a good man who has stopped sleeping. I do not like it when good men stop sleeping."
+      ],
+      "do": ["set_flag('hal_mentioned_tuck')"],
+      "next": "hub"
+    },
+    "missing": {
+      "text": [
+        "Now why would an auditor ask that.",
+        "...Yes. Rations, fuel, medical stock. Never much at once. The manifests always balance, which is how I know somebody clever is cooking them. I cannot search the stores without cause, and the Administrator will not give me cause without proof.",
+        "You have a datapad and a reason to count things. Bring me something I can put in the day book."
+      ],
+      "do": ["start_quest('q_smuggler')", "add_rel(4)"],
+      "next": "hub"
+    },
+    "proof": {
+      "variants": [
+        {"if": "has_item('cargo_manifest')", "text": "Let me see that. ...Two sets of numbers, and the difference is a shuttle-load. 'Magpie, night cycle.' In his own hand. That will do, Auditor. That will do very well."},
+        {"text": "You watched him load the Magpie yourself. At night, off the books. ...An auditor's sworn statement is cause enough for me."}
+      ],
+      "choices": [
+        {"text": "Arrest him.", "do": ["take_item('cargo_manifest', 1)", "put_item('evidence_shelf', 'cargo_manifest', 1)", "set_flag('dex_exposed')", "add_goal('halloran', 'arrest', target='dex', flag='dex_arrested', label='Dex Marlow')", "add_rel(15)"], "goto": "proof_go"},
+        {"text": "Not yet. Let me talk to him first.", "goto": "end"}
+      ]
+    },
+    "proof_go": {
+      "text": "Stay clear of the hangar for the next little while. He will talk, but he will not run. Nowhere to run to - yet.",
+      "next": "end"
+    },
+    "thanks": {
+      "text": [
+        "Marlow is in the holding cell. The Magpie's hold is back in the stores, every ration of it.",
+        "I had you down as the Combine's knife, Auditor. I may have been wrong. Do not make me say that twice."
+      ],
+      "do": ["set_flag('hal_thanked')", "add_rel(15)", "give_item('keycard_sec')", "add_xp(40)"],
+      "next": "end"
+    },
+    "amp": {
+      "text": [
+        "It is in my locker and it is staying there.",
+        "Anders wants it for the radio. Suvari wants it for whatever she is doing with that rig of hers. They nearly came to blows in the mess. The Administrator had me lock it up until somebody with authority decides."
+      ],
+      "choices": [
+        {"text": "The Administrator has decided. Release it to me.", "if": "flag('amp_released')", "goto": "amp_give"},
+        {"text": "You trust me by now, Sergeant.", "if": "rel() >= 30", "goto": "amp_give"},
+        {"text": "I am the authority here. Hand it over.", "if": "flag('audit_authority') and not flag('amp_released')", "check": ["intimidation", 15], "pass": "amp_give", "fail": "amp_refuse"},
+        {"text": "Then I will speak to the Administrator.", "goto": "end"}
+      ]
+    },
+    "amp_refuse": {
+      "text": "No. Get it from her in writing or do not get it at all.",
+      "do": ["add_rel(-6)"], "next": "end"
+    },
+    "amp_give": {
+      "text": "On your head, then. One amplifier core. Whoever you give it to, the other one is going to hate you. I would think hard.",
+      "do": ["remove_from('sec_locker', 'signal_amplifier', 1)", "give_item('signal_amplifier')", "set_flag('amp_taken')"],
+      "next": "end"
+    },
+    "charges": {
+      "text": "He wants to bring down a tunnel on the most valuable thing this station ever found. No. Those charges do not leave my locker for anything short of the Administrator's order - or mine.",
+      "choices": [
+        {"text": "Whatever is down there is hurting him, Sergeant. You have seen it.", "if": "rel() >= 25", "check": ["persuasion", 14], "pass": "charges_give", "fail": "charges_no"},
+        {"text": "Understood.", "goto": "end"}
+      ]
+    },
+    "charges_no": {"text": "I have seen it. The answer is still no.", "next": "end"},
+    "charges_give": {
+      "text": "...I have watched that man walk the corridor at four in the morning for two months. Take them. I was never here.",
+      "do": ["remove_from('sec_locker', 'mining_charge', 2)", "give_item('mining_charge', 2)", "add_xp(30)"],
+      "next": "end"
+    },
+    "dig": {
+      "text": "Ice. Rock. Something the doctor will not let me log. I have asked the Administrator twice. Twice she told me it was above my grade. On a station with ten people on it. Think about that.",
+      "next": "hub"
+    },
+    "caught": {
+      "text": [
+        "A word, Auditor.",
+        "You have been seen helping yourself to other people's lockers. Twice. This is a small station. Everything here belongs to somebody who is counting on it."
+      ],
+      "do": ["set_flag('theft_warned')"],
+      "choices": [
+        {"text": "It will not happen again.", "do": ["add_rel(-5)"], "goto": "caught_ok"},
+        {"text": "I am auditing the stores. Hands-on.", "check": ["persuasion", 14], "pass": "caught_talk", "fail": "caught_fine"},
+        {"text": "Take it up with the Combine.", "do": ["add_rel(-15)"], "goto": "caught_fine"}
+      ]
+    },
+    "caught_ok": {"text": "See that it does not.", "next": "end"},
+    "caught_talk": {"text": "...Auditing. Right. Audit with your eyes from now on.", "next": "end"},
+    "caught_fine": {
+      "text": "Then you can pay the station back. Forty credits into the welfare fund. Next time it is a night in the cell.",
+      "do": ["take_credits(40)"], "next": "end"
+    },
+    "final_day": {
+      "text": "The tug is on the collar. Whatever you tell that captain - I hope you can sleep after it. Go on.",
+      "next": "end"
+    }
+  }
+}

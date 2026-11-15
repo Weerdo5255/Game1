@@ -1,0 +1,44 @@
+{
+  "start": "menu",
+  "nodes": {
+    "menu": {
+      "speaker": "narrator",
+      "text": "CREW NOTICEBOARD. {'Seven' if day() < 3 else 'Nine'} unread notices.",
+      "choices": [
+        {"text": "'Seed delivery short AGAIN' - W. Castellanos", "goto": "wren"},
+        {"text": "'Night movement in the hangar' - Sgt. Halloran", "goto": "hal"},
+        {"text": "'Requisitions' - D. Marlow", "goto": "dex"},
+        {"text": "'To whoever keeps taking the stims' - Dr. Pell", "goto": "pell"},
+        {"text": "'RADIO CLUB' - Pip", "goto": "pip"},
+        {"text": "Log off", "goto": "end"}
+      ]
+    },
+    "wren": {
+      "speaker": "narrator",
+      "text": "'Third month running my seed crate arrives one short. The manifest says it is all there. The manifest and I are going to have words. - Wren'",
+      "next": "menu"
+    },
+    "hal": {
+      "speaker": "narrator",
+      "text": "'Motion logs show somebody in the Hangar Bay between 01:00 and 04:00 on several nights. If that is you: there is nothing down there worth losing sleep over. If it is not you: tell me. - Halloran'",
+      "do": ["set_flag('read_hangar_notice')", "if not quest_started('q_smuggler'): start_quest('q_smuggler')"],
+      "next": "menu"
+    },
+    "dex": {
+      "speaker": "narrator",
+      "text": "'All requisitions must carry the Administrator's countersignature. No, I do not make the rules. Yes, I am available for private purchases at any time. - Dex'",
+      "next": "menu"
+    },
+    "pell": {
+      "speaker": "narrator",
+      "text": "'I am not angry. I am worried. My door is open and nothing you tell me goes in the log. - J.P.'",
+      "next": "menu"
+    },
+    "pip": {
+      "speaker": "narrator",
+      "text": "'RADIO CLUB meets whenever the array works!! (Has not met yet.) If anyone knows how to get the amplifier core out of the security locker, I will do your laundry for a year. - Pip'",
+      "do": ["set_flag('knows_amp')"],
+      "next": "menu"
+    }
+  }
+}

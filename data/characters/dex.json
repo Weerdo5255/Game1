@@ -1,0 +1,177 @@
+{
+  "id": "dex",
+  "name": "Dex Marlow",
+  "title": "Quartermaster",
+  "role": "quartermaster",
+  "faction": "stores",
+  "bio": "Everybody's friend, especially when counting stock. The stores have never quite matched the manifests since he arrived, and somehow it is never his fault.",
+  "appearance": {
+    "body": "human",
+    "skin": "olive",
+    "hair": "short",
+    "hair_color": "brown",
+    "outfit": "vest",
+    "primary": "olive",
+    "secondary": "tan",
+    "legs": "brown",
+    "extras": []
+  },
+  "attrs": {
+    "body": 5,
+    "dexterity": 7,
+    "intellect": 6,
+    "presence": 8,
+    "resolve": 5
+  },
+  "skills": {
+    "persuasion": 7,
+    "stealth": 6,
+    "tech": 3,
+    "athletics": 3
+  },
+  "traits": [
+    "thief"
+  ],
+  "access": [
+    "crew",
+    "stores"
+  ],
+  "spawn": {
+    "map": "hangar",
+    "x": 23,
+    "y": 3,
+    "facing": "down"
+  },
+  "home": {
+    "bed": "bed_dex"
+  },
+  "job": {
+    "region": "stores",
+    "label": "Minding the stores"
+  },
+  "schedule": "quartermaster",
+  "inventory": {
+    "dex_key": 1,
+    "magpie_key": 1,
+    "synth_whiskey": 1
+  },
+  "credits": 260,
+  "relations": {
+    "player": 5,
+    "halloran": -20,
+    "pip": 10,
+    "osei": -5
+  },
+  "trade": {
+    "stock": [
+      "stores_food",
+      "stores_parts",
+      "stores_misc"
+    ],
+    "markup": 1.6,
+    "buys": 0.5
+  },
+  "goals": [
+    {
+      "id": "prep_shuttle",
+      "desc": "Quietly stock the Magpie",
+      "priority": 66,
+      "log": false,
+      "retry": 30,
+      "when": "time_between(1, 4) and day() >= var('dex_next', 2) and not flag('dex_arrested') and not flag('dex_reformed')",
+      "steps": [
+        {
+          "do": "acquire",
+          "item": "ration_pack",
+          "count": 5,
+          "from": [
+            "stores_food"
+          ],
+          "steal": true,
+          "optional": true
+        },
+        {
+          "do": "deliver",
+          "item": "ration_pack",
+          "to": "shuttle_hold"
+        },
+        {
+          "do": "run",
+          "script": [
+            "set_var('dex_next', day() + 1)"
+          ]
+        },
+        {
+          "do": "acquire",
+          "item": "fuel_cell",
+          "count": 2,
+          "from": [
+            "stores_fuel"
+          ],
+          "steal": true,
+          "optional": true
+        },
+        {
+          "do": "deliver",
+          "item": "fuel_cell",
+          "to": "shuttle_hold"
+        },
+        {
+          "do": "run",
+          "script": [
+            "set_var('dex_next', day() + 1)"
+          ]
+        },
+        {
+          "do": "acquire",
+          "item": "spare_parts",
+          "count": 3,
+          "from": [
+            "dex_locker",
+            "stores_parts"
+          ],
+          "steal": true,
+          "optional": true
+        },
+        {
+          "do": "deliver",
+          "item": "spare_parts",
+          "to": "shuttle_hold"
+        },
+        {
+          "do": "run",
+          "script": [
+            "set_flag('magpie_stocked')"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "restock_galley",
+      "desc": "Top up the galley dispenser",
+      "priority": 45,
+      "repeat": true,
+      "cooldown": 180,
+      "log": false,
+      "retry": 120,
+      "when": "time_between(8, 18) and container_count('galley_dispenser', 'ration_pack') < 4 and container_count('stores_food', 'ration_pack') > 2 and not flag('dex_arrested')",
+      "steps": [
+        {
+          "do": "acquire",
+          "item": "ration_pack",
+          "count": 4,
+          "from": [
+            "stores_food"
+          ]
+        },
+        {
+          "do": "deliver",
+          "item": "ration_pack",
+          "to": "galley_dispenser"
+        }
+      ]
+    }
+  ],
+  "dialogue": "dex",
+  "blip": "blip"
+}

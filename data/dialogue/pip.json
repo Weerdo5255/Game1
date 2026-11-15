@@ -1,0 +1,102 @@
+{
+  "start": [
+    {"if": "flag('comms_fixed') and not flag('pip_comms_talk')", "goto": "comms_up"},
+    {"if": "not flag('met_pip')", "goto": "first"},
+    {"goto": "hub"}
+  ],
+  "nodes": {
+    "first": {
+      "text": [
+        "Oh! You are the auditor. Hi. Pip. Junior technician, which means I do everything Bram says is beneath the reactor.",
+        "Did they tell you the comms are down? They are not <y>broken</y> broken. The dish is fine. The transmitter is fine. It is one part. One! If I had the amplifier core I could have us talking to the relay in a couple of days."
+      ],
+      "do": ["set_flag('met_pip')", "start_quest('q_comms')"],
+      "choices": [
+        {"text": "Where is the amplifier core now?", "goto": "core"},
+        {"text": "What good is a radio if nobody is listening?", "goto": "why"}
+      ]
+    },
+    "core": {
+      "text": "Sergeant Halloran's locker. Dr. Suvari wanted it for her rig and I wanted it for the array and it got... loud. So the Administrator had it locked up. But you are the auditor! You could just ask. Could you ask?",
+      "do": ["set_flag('knows_amp')", "if stage('q_signal', 'chamber') or stage('q_signal', 'rumour'): journal('The amplifier core is locked in the security office. Both Pip and Lin want it.')"],
+      "next": "hub"
+    },
+    "why": {
+      "text": "Somebody is always listening. The supply drone is three months late; I think it is waiting on a go-code we cannot send. And if it is worse than that - if they have forgotten us - I would rather know. Would you not rather know?",
+      "next": "core"
+    },
+
+    "hub": {
+      "variants": [
+        {"if": "flag('comms_fixed')", "text": "We have a carrier! Did you hear? An actual carrier!"},
+        {"if": "goal_active('pip', 'repair_comms') and npc_has('pip', 'signal_amplifier')", "text": "I am on it, I am on it. The core is seated; now it is all alignment."},
+        {"if": "eff('fabricator') < 0.2", "text": "The fabricator is just sitting there. No power. I could be making parts!"},
+        {"text": "Hey, Auditor! Need something?"}
+      ],
+      "choices": [
+        {"text": "Here. The amplifier core.", "item": ["signal_amplifier", 1], "goto": "give_core"},
+        {"text": "Could you fabricate a pump seal?", "if": "quest_active('q_water') and not has_item('pump_seal') and not flag('pump_fixed')", "goto": "seal"},
+        {"text": "With this shard I think we can build a second core.", "if": "has_item('artifact_shard') and not flag('second_core')", "skill": ["tech", 6], "goto": "second_core"},
+        {"text": "Take these spare parts for the array.", "if": "flag('amp_to_pip') and not flag('comms_fixed')", "item": ["spare_parts", 1], "goto": "give_parts"},
+        {"text": "Tell me about the fabricator.", "goto": "fab"},
+        {"text": "What are you up to?", "goto": "doing"},
+        {"text": "See you, Pip.", "goto": "end"}
+      ]
+    },
+    "give_core": {
+      "text": [
+        "Is that - you got it? You actually got it!",
+        "Okay. Okay okay okay. I need to reseat it, realign the feed, and then it is just hours at the console. Parts would help. Power would help more: the array is dead last in the queue. But this is the hard bit, and you just did it."
+      ],
+      "do": ["give_to('pip', 'signal_amplifier', 1)", "set_flag('amp_to_pip')", "add_rel(25)", "add_rel(-20, 'lin')", "set_stage('q_comms', 'repairs')", "if quest_active('q_signal'): set_stage('q_signal', 'waiting')", "add_xp(40)"],
+      "next": "end"
+    },
+    "give_parts": {
+      "text": "For the array? You are the best auditor we have ever had. I mean, the only one. But still.",
+      "do": ["give_to('pip', 'spare_parts', 1)", "add_rel(6)"],
+      "next": "hub"
+    },
+    "seal": {
+      "variants": [
+        {"if": "eff('fabricator') < 0.25", "text": "A pump seal? Sure, it is a two-hour print - if the fabricator had any power. Right now it has none. Get it moved up the queue and bring me a couple of pieces of scrap."},
+        {"text": "A pump seal? Two pieces of scrap and two hours. I have the pattern on file."}
+      ],
+      "choices": [
+        {"text": "Here is the scrap. Print it.", "if": "eff('fabricator') >= 0.25", "item": ["scrap_metal", 2], "consume": true, "goto": "seal_made"},
+        {"text": "I will come back.", "goto": "hub"}
+      ]
+    },
+    "seal_made": {
+      "text": "...and there. Still warm. Wren is going to cry. Do not tell her I said that.",
+      "do": ["pass_time(120)", "give_item('pump_seal')", "set_stage('q_water', 'fit_seal')", "add_xp(20)"],
+      "next": "hub"
+    },
+    "second_core": {
+      "text": [
+        "A resonant lattice. You want to use that as the phase reference? That is - that is not in any manual. That would work. That would actually work!",
+        "Give me the shard and the afternoon. Nobody has to choose. Oh, they are both going to be unbearable."
+      ],
+      "do": ["take_item('artifact_shard', 1)", "pass_time(180)", "give_item('signal_amplifier')", "set_flag('second_core')", "add_rel(15)", "add_xp(80)"],
+      "next": "hub"
+    },
+    "fab": {
+      "text": "Scrap in, parts out: two pieces of scrap and about four hours makes one set of spares, straight into the parts locker. It needs me at the console and it needs twenty kilowatts, and most days it gets neither. Efficiency right now: {round(eff('fabricator') * 100)} percent.",
+      "next": "hub"
+    },
+    "doing": {
+      "variants": [
+        {"if": "wants() != ''", "text": "Looking for {item_name(wants())}. You have not seen any, have you? {activity()}, mostly."},
+        {"text": "{activity()}. Why, do you need a hand with something?"}
+      ],
+      "next": "hub"
+    },
+    "comms_up": {
+      "text": [
+        "Auditor! It is up. The array is up. I have a carrier wave and a handshake from the Rhea relay.",
+        "It needs power to actually send - it is still last in the queue, so the console will not transmit until somebody moves it up or shuts something else off. But after that... the console on the Command Deck. You should be the one. It is your tug."
+      ],
+      "do": ["set_flag('pip_comms_talk')", "set_stage('q_comms', 'power')", "add_rel(10)"],
+      "next": "end"
+    }
+  }
+}

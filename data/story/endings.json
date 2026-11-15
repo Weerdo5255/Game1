@@ -1,0 +1,102 @@
+{
+  "_comment": "Endings. Each has a title and slides; a slide with an 'if' only appears when the condition holds. The 'epilogue' slides are appended to every ending that does not set no_epilogue.",
+
+  "viable": {
+    "title": "Ithaca Holds",
+    "slides": [
+      {"text": "Captain Voss logs a single word against Ithaca Station: VIABLE. The Calypso's Thread undocks at noon with one passenger, a datapad, and nobody in restraints who did not earn them."},
+      {"if": "flag('verdict_lied')", "text": "It is your name under that word, and you both know what the gauges really said. You watch the station shrink in the tug's aft port and hope that ten people are as stubborn as they looked."},
+      {"if": "flag('combine_backed_down')", "text": "The report that reaches the board mentions ice, a reactor and a water plant. It does not mention anything else. Some discoveries are safest as rumours."},
+      {"if": "not flag('verdict_lied') and not flag('combine_backed_down')", "text": "For the first time in three years the Combine's ledger has a line that reads 'Ithaca: retain'. A supply drone is released from holding orbit the same afternoon."}
+    ]
+  },
+
+  "decommission": {
+    "title": "Lights Out",
+    "slides": [
+      {"text": "Evacuation takes nine hours. People carry less than you would think: a seed tray, a wrench worn to the shape of one hand, a photograph of twelve figures squinting at a bore rig."},
+      {"if": "flag('verdict_overruled')", "text": "You said viable. Captain Voss looked at her own board and said otherwise, and it is her signature on the order. Nobody thanks either of you."},
+      {"text": "The reactor is scrammed at 21:14. Chief Kowal does it himself and will not let anyone else in the hall. By midnight Ithaca Station is a line of dark windows on the lip of a canyon, and then it is not even that."}
+    ]
+  },
+
+  "independent": {
+    "title": "Clause Nine",
+    "slides": [
+      {"text": "Nobody has invoked Clause Nine in forty years. Captain Voss reads it twice, counts the crew standing in the hangar behind you, and seals her lock without another word."},
+      {"text": "The Calypso's Thread leaves with an empty hold and a retrieval team that never unpacked. What it carries instead is a notarised copy of a charter and a very uncomfortable report."},
+      {"text": "Ithaca is on her own now: no budget, no drone, no flag but the one Pip paints on the comms dish. Ten people and a tired reactor, belonging to nobody but themselves. Administrator Osei asks whether the new republic needs an auditor."}
+    ]
+  },
+
+  "bargain": {
+    "title": "A Fair Trade",
+    "slides": [
+      {"text": "The retrieval team goes down the south tunnel with cutting gear and comes back up, two days later, with a sealed container the size of a coffin. Nobody on the crew is allowed to watch."},
+      {"text": "In exchange the Combine's ledger gains a line: 'Ithaca: retain, indefinitely.' A supply drone is on the pad within the week. It is the best deal the station has had in a decade."},
+      {"text": "Dr. Suvari does not come to the airlock to see you off. On the bench in her lab the analysis rig is still running, tuned to a carrier that is no longer there."}
+    ]
+  },
+
+  "contact": {
+    "title": "Is Anyone There",
+    "no_epilogue": true,
+    "slides": [
+      {"text": "One pulse, down the carrier, through a scavenged amplifier core and a kilometre of ice. Lin Suvari says a single word in a language that is mostly waiting. The word is: yes."},
+      {"text": "For nine seconds nothing happens. Then every instrument on Ithaca Station pegs at once, and something that has been asking a question since before there were people stops asking."},
+      {"text": "When the Calypso's Thread returns she finds a station with its lights burning steady, ten people who will not explain what they are smiling about, and a new star, faint and violet, hanging where no star was catalogued."},
+      {"text": "The Combine board never does get its one-word answer about Ithaca. By then, nobody is asking that question any more."}
+    ]
+  },
+
+  "magpie": {
+    "title": "Honour Among Thieves",
+    "no_epilogue": true,
+    "slides": [
+      {"text": "The Magpie clears the hangar at 02:26 with her transponder dark. Dex flies her the way he does everything: smoothly, and as if someone were watching."},
+      {"text": "Behind you a station wakes up short of fuel, short of rations and short of one auditor. Ahead is Rhea, a buyer who does not ask questions, and a cut of the proceeds."},
+      {"if": "not flag('pump_fixed')", "text": "You do not find out what happened to Ithaca for almost a year. The salvage listing is brief. 'Habitat, forty years old. Reactor cold. Tanks dry. Sold as seen.'"},
+      {"if": "flag('pump_fixed')", "text": "You hear, later, that they held on a while. The pump you fixed kept running long after the people who needed it had run out of everything else."}
+    ]
+  },
+
+  "blackout": {
+    "title": "The Long Dark",
+    "no_epilogue": true,
+    "slides": [
+      {"text": "The scrubbers lose the race somewhere in the small hours. People sit down in corridors to rest and find they would rather not get up."},
+      {"text": "When the Calypso's Thread docks, her captain needs no audit. The station gives its own verdict: frost on the inside of the windows, and a tally chalked on the reactor casing that nobody will ever rub out again."},
+      {"text": "Your report, had you lived to file it, would have been one word long."}
+    ]
+  },
+
+  "absent": {
+    "title": "No Report Filed",
+    "slides": [
+      {"text": "Captain Voss waits twelve hours at the main airlock for an auditor who never comes. Then she does what the board would have wanted, and starts loading people."},
+      {"text": "You watch from somewhere else on the station as forty years are packed into nine hours. A decision is a thing that gets made whether or not you are in the room."}
+    ]
+  },
+
+  "epilogue": {
+    "slides": [
+      {"if": "quest_done('q_reactor')", "text": "Bram Kowal's reactor ran at better than eighty percent for the first time in a decade. He rubbed the tally off the casing and did not chalk a new one."},
+      {"if": "not quest_done('q_reactor') and cond('reactor') < 50", "text": "The reactor limped on at {round(cond('reactor'))} percent. Bram stopped going back to his bunk and slept in the hall, one hand on the casing."},
+      {"if": "flag('pump_fixed')", "text": "The reclamation pump kept its new seal and its steady pulse. Wren Castellanos planted a fourth bed, and named the first tomato after you. It was not a compliment; it was a very small tomato."},
+      {"if": "not flag('pump_fixed')", "text": "Nobody ever fixed the pump. Wren carried water to her beds by hand until there was no water worth carrying."},
+      {"if": "flag('dex_arrested')", "text": "Dex Marlow left Tethys in restraints, still explaining that the manifests balanced. They did. That had always been the problem."},
+      {"if": "flag('dex_reformed')", "text": "Dex Marlow ran the most honest stores in the outer system for exactly as long as someone was watching, which, on a station of ten, was always."},
+      {"if": "flag('dex_left')", "text": "Dex Marlow and the Magpie were logged at Rhea four days later. The fuel he took would have run the station for two days. It is a number people on Ithaca remembered."},
+      {"if": "flag('comms_fixed')", "text": "Pip Anders' Radio Club finally met. Attendance: one technician, one drone, and a relay on Rhea that had been wondering where everybody went."},
+      {"if": "not flag('comms_fixed')", "text": "The comms array stayed dark. Pip kept the dish polished anyway, the way you keep a place set at a table."},
+      {"if": "flag('tunnel_sealed')", "text": "A thousand tonnes of ice lie over the chamber now. Tuck Abara sleeps through the night. Lin Suvari has not spoken to him since, and plays her old recordings very quietly, with the door shut."},
+      {"if": "flag('artifact_waiting') and not flag('artifact_traded')", "text": "The spire still stands in its warm round room, asking its patient question of whoever comes next. Lin sits with it most evenings. She has stopped pretending it is work."},
+      {"if": "flag('tuck_rested') and not flag('tunnel_sealed')", "text": "Tuck Abara ran the bore on eight hours' sleep a night and found that the ice was only ice again, most of the time."},
+      {"if": "flag('tuck_reported')", "text": "Dr. Pell kept Tuck off the bore for a month. Tuck did not forgive whoever told him, and it probably saved his life."},
+      {"if": "rel('halloran') >= 30", "text": "Sergeant Halloran wrote one line about you in the day book: 'Auditor. Turned out all right.' From him, that is a medal."},
+      {"if": "rel('osei') >= 30", "text": "Imara Osei kept a copy of your report in the drawer with the charter. She has been known to read from it at station dinners."},
+      {"if": "flag('relief_called')", "text": "Your distress call was picked up by three stations and a freight hauler. Within the month Ithaca had more visitors than in the previous ten years, and most of them brought something."},
+      {"text": "MOTE-7 continued its maintenance loop. When asked about the auditor, it replied that the auditor had been 'within tolerance', and requested spare parts."}
+    ]
+  }
+}

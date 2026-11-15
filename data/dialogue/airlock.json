@@ -1,0 +1,20 @@
+{
+  "start": [
+    {"if": "stage('q_audit', 'final')", "goto": "docked"},
+    {"goto": "sealed"}
+  ],
+  "nodes": {
+    "sealed": {
+      "speaker": "narrator",
+      "text": "The outer door is sealed and furred with frost. Beyond it: a docking collar with nothing attached, and a very long drop. The tug is <y>{max(0, round(hours_until(6, 8)))} hours</y> away."
+    },
+    "docked": {
+      "speaker": "narrator",
+      "text": "The collar light burns green. On the far side of the lock Captain Voss of the Calypso's Thread is waiting for one word from you. Once you go through, there is no more time to change anything.",
+      "choices": [
+        {"text": "Go through. It is time.", "do": ["start_dialogue('verdict')"], "goto": "end"},
+        {"text": "Not yet.", "goto": "end"}
+      ]
+    }
+  }
+}

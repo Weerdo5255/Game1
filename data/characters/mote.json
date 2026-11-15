@@ -1,0 +1,64 @@
+{
+  "id": "mote",
+  "name": "MOTE-7",
+  "title": "Maintenance Drone",
+  "role": "drone",
+  "faction": "engineering",
+  "bio": "Mobile Operations and Technical Engineering unit, seventh of seven. The other six are in the spares bin. It has opinions about that.",
+  "appearance": {
+    "body": "drone",
+    "primary": "steel",
+    "secondary": "cyan"
+  },
+  "attrs": {
+    "body": 5,
+    "dexterity": 7,
+    "intellect": 5,
+    "presence": 3,
+    "resolve": 10
+  },
+  "skills": {
+    "engineering": 3,
+    "tech": 4
+  },
+  "traits": [
+    "synthetic"
+  ],
+  "access": [
+    "crew",
+    "engineering",
+    "medical",
+    "science"
+  ],
+  "spawn": {
+    "map": "hub",
+    "x": 20,
+    "y": 13,
+    "facing": "down"
+  },
+  "job": {
+    "duty": "maintain",
+    "maintain": [
+      "life_support",
+      "medbay",
+      "hydroponics",
+      "comms"
+    ],
+    "repair_below": 55,
+    "markers": [
+      "patrol_hub",
+      "ls_door",
+      "patrol_habitat",
+      "patrol_eng"
+    ],
+    "label": "Running its maintenance loop"
+  },
+  "schedule": "drone",
+  "inventory": {},
+  "credits": 0,
+  "relations": {
+    "player": 0
+  },
+  "dialogue": "mote",
+  "blip": "blip_robot"
+}

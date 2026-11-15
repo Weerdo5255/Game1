@@ -1,0 +1,104 @@
+{
+  "start": [
+    {"if": "flag('tunnel_sealed')", "goto": "after"},
+    {"if": "not flag('met_tuck')", "goto": "first"},
+    {"goto": "hub"}
+  ],
+  "nodes": {
+    "first": {
+      "variants": [
+        {"if": "has_effect('cold')", "text": ["You are down here without a suit. Are you trying to die? ...No. Sorry. Long shift. Tuck Abara. I run the bore.", "Whatever you want, be quick, and then get back up top before your fingers go."]},
+        {"text": ["Suit seals good? Then you have more sense than the last Combine man. Tuck Abara. I run the bore.", "Forty years my family has been cutting this ice. I would have liked to be the one who finished the job, not the one who..." ]}
+      ],
+      "do": ["set_flag('met_tuck')"],
+      "next": "hub"
+    },
+    "hub": {
+      "variants": [
+        {"if": "flag('tuck_rested')", "text": "Slept nine hours. Nine. I had forgotten what my own head sounds like when it is quiet. What do you need?"},
+        {"if": "goal_active('tuck', 'seal_tunnel')", "text": "Do not try to talk me out of it."},
+        {"if": "eff('drill') < 0.15", "text": "Rig is stalled again. No power this far down the queue. So I stand here and listen to it. To the ice, I mean."},
+        {"text": "Auditor."}
+      ],
+      "choices": [
+        {"text": "What did you find down here, Tuck?", "goto": "found"},
+        {"text": "You look like you have not slept in a month.", "if": "(stage('q_medical', 'tuck') or flag('hal_mentioned_tuck') or flag('knows_tuck_stims')) and not flag('tuck_confided')", "goto": "confide"},
+        {"text": "Take these. From a friend. They will let you sleep.", "if": "flag('tuck_confided') and not flag('tuck_rested')", "item": ["sedative", 2], "consume": true, "goto": "sleep"},
+        {"text": "The water plant needs a seal. Your rig has the same fitting.", "if": "quest_active('q_water') and not has_item('pump_seal') and not flag('pump_fixed') and not flag('tuck_gave_seal')", "goto": "seal"},
+        {"text": "Would you really bury it?", "if": "flag('knows_signal') and not flag('tuck_wants_charges')", "goto": "bury"},
+        {"text": "Here are the charges.", "if": "flag('tuck_wants_charges')", "item": ["mining_charge", 2], "goto": "charges"},
+        {"text": "Stand down, Tuck. Give Lin her chance.", "if": "goal_active('tuck', 'seal_tunnel')", "check": ["persuasion", 14], "pass": "stand_down", "fail": "stand_no"},
+        {"text": "Stay warm.", "goto": "end"}
+      ]
+    },
+    "found": {
+      "text": [
+        "Eight months back. The bit dropped two metres through nothing and the whole rig screamed. I went down the shaft on a line to free it.",
+        "There is a room. Round. Warm. And a thing standing in it like it had been waiting for the door to open. I have been cutting ice since I was fourteen. Ice does not make rooms.",
+        "South tunnel, all the way down. Go and see. Then tell me I am not mad."
+      ],
+      "do": ["set_flag('knows_signal')", "if not quest_started('q_signal'): start_quest('q_signal')", "if stage('q_signal', 'rumour'): set_stage('q_signal', 'chamber')"],
+      "next": "hub"
+    },
+    "confide": {
+      "text": [
+        "...Is it that plain? Yeah. I buy stims off Marlow. Three a week.",
+        "It is not staying awake I want. It is not dreaming. Every time I go under it is the same: I am in that room, and something very big and very patient is asking me a question I cannot hear properly. And I wake up with my hand out, like I was about to touch it."
+      ],
+      "do": ["set_flag('tuck_confided')", "set_flag('knows_tuck_stims')", "set_flag('knows_signal')", "if quest_active('q_medical'): set_stage('q_medical', 'decide')", "if not quest_started('q_signal'): start_quest('q_signal')", "add_xp(30)"],
+      "choices": [
+        {"text": "I will not tell Pell. But this cannot go on.", "do": ["add_rel(10)"], "goto": "hub"},
+        {"text": "Pell has to know. You are going to kill yourself.", "do": ["add_rel(-5)"], "goto": "hub"},
+        {"text": "I have heard it too.", "if": "flag('touched_artifact')", "do": ["add_rel(20)"], "goto": "heard"}
+      ]
+    },
+    "heard": {
+      "text": "Then you know. Thank God. I thought it was just me and the doctor, and she likes it.",
+      "next": "hub"
+    },
+    "sleep": {
+      "text": "From a friend. ...I know that label. Tell the doctor - no. Tell 'a friend' thank you. I am going to my bunk, and God help anyone who wakes me.",
+      "do": ["set_flag('tuck_rested')", "add_need('fatigue', -80, 'tuck')", "add_morale(25, 'tuck')", "add_rel(20)", "take_item('stim', 2, 'tuck')", "if quest_active('q_medical'): complete_quest('q_medical')", "add_xp(30)"],
+      "next": "end"
+    },
+    "seal": {
+      "text": "Pull the seal and the bore is down until somebody prints another. This rig is the last thing on Ithaca that still does what it was built for.",
+      "choices": [
+        {"text": "It makes water. The pump recycles ten times what it makes.", "check": ["persuasion", 13], "pass": "seal_yes", "fail": "seal_no"},
+        {"text": "Wren asked me. She is rationing the beds by hand.", "if": "rel() >= 10", "goto": "seal_yes"},
+        {"text": "Keep it, then.", "goto": "hub"}
+      ]
+    },
+    "seal_no": {"text": "No. Find another one.", "next": "hub"},
+    "seal_yes": {
+      "text": "...For Wren. Fine. Give me ten minutes with a wrench. And tell her the rig sends its regards.",
+      "do": ["set_flag('tuck_gave_seal')", "pass_time(15)", "give_item('pump_seal')", "damage('drill', 30)", "set_cap('drill', 55)", "set_stage('q_water', 'fit_seal')", "add_rel(-4)"],
+      "next": "hub"
+    },
+    "bury": {
+      "text": "In a heartbeat. Two charges at the mouth of the south tunnel and that room goes back to being ice. Halloran has them locked up. He says it is the Administrator's call. It is in <y>my</y> head, not hers.",
+      "do": ["set_flag('tuck_wants_charges')"],
+      "next": "hub"
+    },
+    "charges": {
+      "text": "You got them. ...You are sure? Once it is done it is done. No. Do not answer. If you were not sure you would not have carried them down here.",
+      "choices": [
+        {"text": "Do it.", "do": ["give_to('tuck', 'mining_charge', 2)", "set_flag('tuck_charges')", "add_goal('tuck', 'seal_tunnel')", "add_rel(15)"], "goto": "end"},
+        {"text": "Not yet.", "goto": "hub"}
+      ]
+    },
+    "stand_no": {"text": "She has had eight months. I have had eight months of it too. No.", "next": "end"},
+    "stand_down": {
+      "text": "...One chance. She gets one. If that thing does anything but sit there, I am not asking permission twice.",
+      "do": ["cancel_goal('tuck', 'seal_tunnel')", "set_flag('tuck_stood_down')", "add_xp(40)"],
+      "next": "end"
+    },
+    "after": {
+      "variants": [
+        {"if": "flag('tuck_charges')", "text": "It is quiet. First time in eight months. Whatever they do to me for it - thank you."},
+        {"text": "The room is gone. I can still hear it, a little. Like a bell after it has stopped. Maybe that fades."}
+      ],
+      "next": "end"
+    }
+  }
+}

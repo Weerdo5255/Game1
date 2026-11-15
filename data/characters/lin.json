@@ -1,0 +1,100 @@
+{
+  "id": "lin",
+  "name": "Dr. Lin Suvari",
+  "title": "Xenoarchaeologist",
+  "role": "scientist",
+  "faction": "science",
+  "bio": "Came to Tethys to study ice. Eight months ago the ice started studying her back. She has not really slept since.",
+  "appearance": {
+    "body": "human",
+    "skin": "fair",
+    "hair": "long",
+    "hair_color": "black",
+    "outfit": "labcoat",
+    "primary": "purple",
+    "secondary": "white",
+    "legs": "black",
+    "extras": [
+      "glasses"
+    ]
+  },
+  "attrs": {
+    "body": 3,
+    "dexterity": 5,
+    "intellect": 9,
+    "presence": 4,
+    "resolve": 7
+  },
+  "skills": {
+    "science": 9,
+    "tech": 6,
+    "medicine": 2
+  },
+  "traits": [
+    "obsessive"
+  ],
+  "access": [
+    "crew",
+    "science"
+  ],
+  "spawn": {
+    "map": "medlab",
+    "x": 17,
+    "y": 4,
+    "facing": "up"
+  },
+  "home": {
+    "bed": "bed_lin"
+  },
+  "job": {
+    "system": "lab"
+  },
+  "schedule": "obsessive",
+  "inventory": {
+    "keycard_sci": 1,
+    "nutrient_paste": 1,
+    "thermal_suit": 1
+  },
+  "credits": 50,
+  "relations": {
+    "player": -5,
+    "bram": -30,
+    "tuck": 5,
+    "pell": -5
+  },
+  "goals": [
+    {
+      "id": "decode_signal",
+      "desc": "Decode the signal from under the ice",
+      "priority": 47,
+      "when": "not flag('lin_paused') and not flag('tunnel_sealed')",
+      "retry": 90,
+      "steps": [
+        {
+          "do": "acquire",
+          "item": "signal_amplifier",
+          "count": 1
+        },
+        {
+          "do": "work",
+          "system": "lab",
+          "var": "signal_progress",
+          "target": 40,
+          "label": "Listening to the ice at"
+        },
+        {
+          "do": "run",
+          "script": [
+            "take_item('signal_amplifier', 1, self)",
+            "set_flag('signal_decoded')"
+          ]
+        }
+      ]
+    }
+  ],
+  "dialogue": "lin",
+  "blip": "blip_high",
+  "equipped": {
+    "suit": "thermal_suit"
+  }
+}

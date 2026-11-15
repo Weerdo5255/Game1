@@ -1,0 +1,105 @@
+{
+  "_comment": "Quest definitions. Stages are visited through set_stage() in dialogue and director rules; see game/story/quests.py.",
+
+  "q_audit": {
+    "name": "The Audit",
+    "main": true,
+    "xp": 150,
+    "desc": "The Meridian Combine wants one word from you: keep Ithaca Station, or close it. The tug returns on Day 6 at 08:00.",
+    "stages": {
+      "report_in": "Report to Administrator Osei on the Command Deck, north of the Central Ring.",
+      "inspect": "See the station for yourself. Speak to Chief Kowal in Engineering, Wren Castellanos in Hydroponics and Dr. Pell in the Medbay.",
+      "findings": "You have seen all three departments. Take your first impressions back to Administrator Osei.",
+      "countdown": "The tug docks on Day 6 at 08:00. Whatever your report is going to say, make the station match it before then.",
+      "final": "The Calypso's Thread has docked. Give your verdict at the main airlock in the Hangar Bay."
+    },
+    "outcomes": {"done": "You gave your verdict."}
+  },
+
+  "q_reactor": {
+    "name": "Keep the Lights On",
+    "xp": 90,
+    "desc": "The fusion reactor is forty years old and losing ground. Chief Kowal can hold it together, but not with empty hands.",
+    "stages": {
+      "parts": "Bram needs spare parts. The quartermaster's stores hold some, the fabricator can make more if it gets power and scrap, and you can fit parts yourself at the reactor console.",
+      "stabilise": "Bring the Fusion Reactor to 85% integrity or better."
+    },
+    "outcomes": {
+      "done": "The reactor is holding steady. Bram looked at you as if you might be useful after all.",
+      "failed": "The reactor went dark."
+    }
+  },
+
+  "q_water": {
+    "name": "Pressure Drop",
+    "xp": 80,
+    "desc": "The main reclamation pump is leaking through a perished seal. The station is drinking its reserve tank dry.",
+    "stages": {
+      "find_seal": "Find a replacement pump seal. Dex may have one in stock, Pip might fabricate one from scrap, and Tuck's bore rig uses the same fitting.",
+      "fit_seal": "You have a pump seal. Fit it at the reclamation pump in Hydroponics, or hand it to Wren."
+    },
+    "outcomes": {
+      "done": "The pump runs smooth and the tank gauge has stopped falling.",
+      "failed": "The tanks ran dry before the pump was fixed."
+    }
+  },
+
+  "q_medical": {
+    "name": "Missing Doses",
+    "xp": 70,
+    "desc": "Stim injectors are disappearing from the medicine cabinet. Dr. Pell wants to know who is not sleeping, and why.",
+    "stages": {
+      "ask_around": "Find out who has been taking stims. Somebody on the crew will have noticed.",
+      "tuck": "Wren says Tuck has not slept properly in weeks. Talk to him at the dig.",
+      "decide": "Tuck is using stims to stay ahead of his dreams. Decide what Dr. Pell hears."
+    },
+    "outcomes": {
+      "done": "The matter of the missing stims is settled, one way or another."
+    }
+  },
+
+  "q_smuggler": {
+    "name": "Inventory Shrinkage",
+    "xp": 100,
+    "desc": "The stores never match the manifests. Somebody is skimming, on a station that cannot spare a ration.",
+    "stages": {
+      "suspect": "Find proof of where the missing supplies are going. The quartermaster keeps odd hours.",
+      "proof": "Dex Marlow is stocking the shuttle Magpie for a run of his own. Decide what to do about it."
+    },
+    "outcomes": {
+      "done": "Dex's little enterprise is finished.",
+      "failed": "The Magpie is gone, and Dex and a shuttle-load of supplies with it."
+    }
+  },
+
+  "q_signal": {
+    "name": "Something in the Ice",
+    "xp": 140,
+    "desc": "The bore broke through into something eight months ago. Nobody has put it in a report.",
+    "stages": {
+      "rumour": "The dig found something. Find out what Dr. Suvari is not writing down.",
+      "chamber": "See the chamber beneath the dig site for yourself. Take a thermal suit.",
+      "amplifier": "Lin needs the amplifier core to decode the signal. Pip needs the same core to restore comms. Sergeant Halloran has it under lock and key.",
+      "waiting": "The core has found a home. Now the station waits to see what comes of it.",
+      "decoded": "Lin has decoded the signal. She is waiting for you in the chamber - and Tuck knows it."
+    },
+    "outcomes": {
+      "done": "The question of the artifact has been answered.",
+      "failed": "The chamber is buried under a thousand tonnes of ice."
+    }
+  },
+
+  "q_comms": {
+    "name": "Dead Air",
+    "xp": 100,
+    "desc": "Ithaca has been deaf and dumb for eight months. Pip is sure the array can be rebuilt.",
+    "stages": {
+      "core": "Pip cannot start without the amplifier core.",
+      "repairs": "Pip is rebuilding the array. Spare parts will speed it up.",
+      "power": "The array is rebuilt but starved: it sits last in the power queue. Get it powered, then use the comms console on the Command Deck."
+    },
+    "outcomes": {
+      "done": "Ithaca Station can talk to the rest of the system again."
+    }
+  }
+}

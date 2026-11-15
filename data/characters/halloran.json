@@ -1,0 +1,89 @@
+{
+  "id": "halloran",
+  "name": "Sgt. Cormac Halloran",
+  "title": "Security Chief",
+  "role": "security",
+  "faction": "command",
+  "bio": "Ex-Combine marine who took the quietest posting on the list and then found out why it was quiet. Trusts the Administrator, the day book and very little else.",
+  "appearance": {
+    "body": "human",
+    "skin": "fair",
+    "hair": "buzz",
+    "hair_color": "ginger",
+    "outfit": "vest",
+    "primary": "slate",
+    "secondary": "red",
+    "legs": "black",
+    "extras": [
+      "beard"
+    ]
+  },
+  "attrs": {
+    "body": 8,
+    "dexterity": 6,
+    "intellect": 5,
+    "presence": 6,
+    "resolve": 7
+  },
+  "skills": {
+    "intimidation": 7,
+    "athletics": 6,
+    "survival": 4,
+    "stealth": 2,
+    "persuasion": 2
+  },
+  "access": [
+    "crew",
+    "security",
+    "command",
+    "stores"
+  ],
+  "spawn": {
+    "map": "hangar",
+    "x": 15,
+    "y": 16,
+    "facing": "down"
+  },
+  "home": {
+    "bed": "bed_halloran"
+  },
+  "job": {
+    "markers": [
+      "patrol_hub",
+      "patrol_hangar",
+      "patrol_eng",
+      "patrol_command",
+      "patrol_habitat"
+    ],
+    "label": "On patrol"
+  },
+  "schedule": "security",
+  "inventory": {
+    "keycard_sec": 1,
+    "ration_pack": 1
+  },
+  "equipped": {
+    "tool": "stun_baton"
+  },
+  "credits": 90,
+  "relations": {
+    "player": -15,
+    "osei": 45,
+    "dex": -25,
+    "lin": -10,
+    "tuck": 15
+  },
+  "goals": [
+    {
+      "use": "confront_player",
+      "id": "greet_auditor",
+      "priority": 82,
+      "args": {
+        "node": "welcome"
+      },
+      "log": false
+    }
+  ],
+  "dialogue": "halloran",
+  "blip": "blip_low"
+}

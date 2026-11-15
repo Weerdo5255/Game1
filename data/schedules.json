@@ -1,0 +1,79 @@
+{
+  "_comment": "Daily routines. Each block: from/to hours (may wrap midnight) and an activity: work, meal, leisure, sleep, patrol, idle. Optional: region, system, markers, label, priority.",
+
+  "day": [
+    {"from": 6, "to": 7, "do": "meal"},
+    {"from": 7, "to": 12, "do": "work"},
+    {"from": 12, "to": 13, "do": "meal"},
+    {"from": 13, "to": 18, "do": "work"},
+    {"from": 18, "to": 19, "do": "meal"},
+    {"from": 19, "to": 22, "do": "leisure"},
+    {"from": 22, "to": 6, "do": "sleep"}
+  ],
+  "early": [
+    {"from": 5, "to": 6, "do": "meal"},
+    {"from": 6, "to": 11, "do": "work"},
+    {"from": 11, "to": 12, "do": "meal"},
+    {"from": 12, "to": 16, "do": "work"},
+    {"from": 16, "to": 18, "do": "leisure", "region": "rec_room"},
+    {"from": 18, "to": 19, "do": "meal"},
+    {"from": 19, "to": 21, "do": "leisure"},
+    {"from": 21, "to": 5, "do": "sleep"}
+  ],
+  "late": [
+    {"from": 9, "to": 10, "do": "meal"},
+    {"from": 10, "to": 14, "do": "work"},
+    {"from": 14, "to": 15, "do": "meal"},
+    {"from": 15, "to": 23, "do": "work"},
+    {"from": 23, "to": 1, "do": "leisure", "region": "gallery"},
+    {"from": 1, "to": 9, "do": "sleep"}
+  ],
+  "obsessive": [
+    {"from": 7, "to": 8, "do": "meal"},
+    {"from": 8, "to": 14, "do": "work"},
+    {"from": 14, "to": 15, "do": "meal"},
+    {"from": 15, "to": 24, "do": "work"},
+    {"from": 0, "to": 7, "do": "sleep"}
+  ],
+  "command": [
+    {"from": 6, "to": 7, "do": "meal"},
+    {"from": 7, "to": 12, "do": "work", "region": "admin_office", "label": "Working at her desk"},
+    {"from": 12, "to": 13, "do": "meal"},
+    {"from": 13, "to": 15, "do": "work", "region": "ops", "label": "Reviewing the boards in Operations"},
+    {"from": 15, "to": 19, "do": "work", "region": "admin_office", "label": "Working at her desk"},
+    {"from": 19, "to": 20, "do": "meal"},
+    {"from": 20, "to": 22, "do": "leisure", "region": "gallery"},
+    {"from": 22, "to": 6, "do": "sleep"}
+  ],
+  "security": [
+    {"from": 6, "to": 7, "do": "meal"},
+    {"from": 7, "to": 12, "do": "patrol"},
+    {"from": 12, "to": 13, "do": "meal"},
+    {"from": 13, "to": 16, "do": "work", "region": "security", "label": "Writing up the day book"},
+    {"from": 16, "to": 20, "do": "patrol"},
+    {"from": 20, "to": 21, "do": "meal"},
+    {"from": 21, "to": 23, "do": "leisure", "region": "rec_room"},
+    {"from": 23, "to": 6, "do": "sleep"}
+  ],
+  "quartermaster": [
+    {"from": 7, "to": 8, "do": "meal"},
+    {"from": 8, "to": 13, "do": "work", "region": "stores", "label": "Minding the stores"},
+    {"from": 13, "to": 14, "do": "meal"},
+    {"from": 14, "to": 18, "do": "work", "region": "stores", "label": "Minding the stores"},
+    {"from": 18, "to": 22, "do": "leisure"},
+    {"from": 22, "to": 1, "do": "sleep"},
+    {"from": 1, "to": 4, "do": "idle", "region": "cargo", "label": "Taking inventory, he says"},
+    {"from": 4, "to": 7, "do": "sleep"}
+  ],
+  "drone": [
+    {"from": 0, "to": 24, "do": "patrol", "label": "Running its maintenance loop"}
+  ],
+  "confined": [
+    {"from": 0, "to": 24, "do": "idle", "region": "brig_cell", "label": "Sitting in the holding cell"}
+  ],
+  "resting": [
+    {"from": 8, "to": 9, "do": "meal"},
+    {"from": 9, "to": 21, "do": "leisure", "region": "rec_room"},
+    {"from": 21, "to": 8, "do": "sleep"}
+  ]
+}

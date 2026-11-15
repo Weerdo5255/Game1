@@ -1,0 +1,109 @@
+{
+  "start": "voss",
+  "nodes": {
+    "voss": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": [
+        "Auditor. You look like you have had five long days.",
+        "The board wants it in one word and I want to be off this moon before my coffee goes cold. So. Is Ithaca Station viable, or do I start loading people?"
+      ],
+      "choices": [
+        {"text": "It is viable. Keep it running.", "goto": "viable_check"},
+        {"text": "It cannot be saved. Evacuate everyone.", "goto": "decommission"},
+        {"text": "I have read your real orders, Captain. This was never an audit.", "if": "flag('knows_combine_plan')", "goto": "orders"},
+        {"text": "Give me a moment.", "goto": "end"}
+      ]
+    },
+    "viable_check": {
+      "branch": [
+        {"if": "cond('reactor') >= 60 and res_pct('water') >= 25 and res('air') >= 70 and not flag('dex_left')", "goto": "viable_ok"},
+        {"goto": "viable_doubt"}
+      ]
+    },
+    "viable_ok": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "Hm. Reactor at {round(cond('reactor'))} percent, tanks holding, air clean. I have seen worse stations with ten times the budget. I will log it as viable. They owe you a drink, Auditor - all ten of them.",
+      "do": ["complete_quest('q_audit')", "end_game('viable')"]
+    },
+    "viable_doubt": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "My own board says reactor {round(cond('reactor'))} percent, water at {round(res_pct('water'))} percent of tank, air at {round(res('air'))}. You want me to put my name under 'viable' on that?",
+      "choices": [
+        {"text": "Sign it. I will answer for it.", "check": ["persuasion", 16], "pass": "viable_lie", "fail": "viable_refused"},
+        {"text": "No. You are right. Close it.", "goto": "decommission"}
+      ]
+    },
+    "viable_lie": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "...Your name goes first, then. And if this place kills them, it is your report they will read out at the inquiry.",
+      "do": ["set_flag('verdict_lied')", "complete_quest('q_audit')", "end_game('viable')"]
+    },
+    "viable_refused": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "No. I have buried crews for less than this. I am overriding you, Auditor: we evacuate.",
+      "do": ["set_flag('verdict_overruled')", "complete_quest('q_audit')", "end_game('decommission')"]
+    },
+    "decommission": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "Then it is done. Forty years. I will have my people start with the medbay cases. You may want to be elsewhere when the Administrator hears.",
+      "do": ["complete_quest('q_audit')", "end_game('decommission')"]
+    },
+    "orders": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": [
+        "...So the array works again. That was not in my briefing.",
+        "Then you know my hands are tied. There is a retrieval team in my hold and a board that wants whatever is under this ice. The crew were always going to be relocated. I am sorry. I did not write the orders."
+      ],
+      "choices": [
+        {"text": "Clause Nine of the charter. A self-sustaining crew may refuse decommissioning. They refuse.", "if": "has_item('station_charter')", "goto": "charter_check"},
+        {"text": "Every word of those orders is on open band the moment you undock.", "if": "online('comms')", "check": ["intimidation", 15], "pass": "broadcast", "fail": "broadcast_fail"},
+        {"text": "Take your artifact and leave these people their home.", "if": "not flag('tunnel_sealed') and not flag('artifact_resolved')", "goto": "bargain"},
+        {"text": "There is nothing down there any more. The chamber is buried.", "if": "flag('tunnel_sealed')", "goto": "buried"},
+        {"text": "Then do what you came to do.", "goto": "decommission"}
+      ]
+    },
+    "charter_check": {
+      "branch": [
+        {"if": "allies(20) >= 4 and cond('reactor') >= 50 and res_pct('water') >= 20", "goto": "charter_ok"},
+        {"goto": "charter_fail"}
+      ]
+    },
+    "charter_ok": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": [
+        "Clause Nine. I have not seen that invoked since Ceres.",
+        "They would have to stand behind it, every one of them, and the station would have to hold without us. ...And you are telling me it will. Then I have no lawful way to move them, and I will not be the one who finds an unlawful one. Ithaca is on her own, Auditor. God help you all."
+      ],
+      "do": ["complete_quest('q_audit')", "end_game('independent')"]
+    },
+    "charter_fail": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "Clause Nine needs a crew that will stand behind it and a station that can stand alone. Look around you, Auditor. You have neither. I am sorry.",
+      "next": "decommission"
+    },
+    "broadcast": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "...You would, too. Fine. The board gets a report that says 'viable, nothing of interest', and I get to keep my licence. We never had this conversation.",
+      "do": ["set_flag('combine_backed_down')", "complete_quest('q_audit')", "end_game('viable')"]
+    },
+    "broadcast_fail": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "With what? I can have that array jammed before your first packet clears the dish. Do not threaten me on my own lock.",
+      "next": "decommission"
+    },
+    "bargain": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "The thing in the ice for the station. ...The board would take that trade, I think. They only ever wanted the one. I will write it up so that it reads like their idea.",
+      "do": ["set_flag('artifact_traded')", "complete_quest('q_audit')", "end_game('bargain')"]
+    },
+    "buried": {
+      "speaker": "voss", "speaker_name": "Captain Voss",
+      "text": "Buried. ...Then there is nothing here the board wants, and a station is just a station again. I will tell them the audit stands on its merits. So: your one word, Auditor.",
+      "do": ["set_flag('combine_backed_down')"],
+      "choices": [
+        {"text": "Viable.", "goto": "viable_check"},
+        {"text": "Close it.", "goto": "decommission"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "_comment": "Shared resources and the systems that produce / consume them. Rates are per game hour at 100% efficiency. See game/sim/systems.py.",
+
+  "resources": {
+    "air": {"name": "Air", "unit": "%", "start": 93, "cap": 100, "per_crew": -0.32, "low": 0.62, "critical": 0.35},
+    "water": {"name": "Water", "unit": "L", "start": 560, "cap": 900, "per_crew": -1.2, "low": 0.3, "critical": 0.12}
+  },
+
+  "systems": {
+    "reactor": {
+      "name": "Fusion Reactor", "kind": "generator", "power_out": 120,
+      "map": "engineering", "console": "reactor_console",
+      "fuel": {"item": "fuel_cell", "hours": 26, "hopper": "reactor_hopper", "start_hours": 14},
+      "decay": 0.55, "start_condition": 62, "skill": "engineering", "operator": 0.15, "essential": true,
+      "desc": "A forty-year-old tokamak that was meant to be replaced after twenty. Everything else on the station runs on what it gives. It burns one fuel cell roughly every day; integrity below 75% costs output, and below 25% it barely turns over."
+    },
+    "rtg": {
+      "name": "Auxiliary RTG", "kind": "generator", "power_out": 20,
+      "map": "engineering", "console": "",
+      "decay": 0.0, "start_condition": 100, "operator": 0.0, "essential": true,
+      "desc": "A sealed radioisotope generator bolted behind the reactor hall. It cannot be repaired, switched off or improved; it simply gives twenty kilowatts until the heat death of the universe. It is why life support survives a scram - mostly."
+    },
+    "life_support": {
+      "name": "Life Support", "map": "hub", "console": "ls_console",
+      "power": 30, "priority": 1, "decay": 0.4, "start_condition": 66,
+      "produces": {"air": 4.6}, "skill": "engineering", "operator": 0.0, "essential": true,
+      "desc": "Scrubbers, heat exchangers and the fans you stop hearing after a week. First in the power queue, always. If air quality falls under 60% people get slow and stupid; under 30% they start to die."
+    },
+    "water_reclaim": {
+      "name": "Water Reclamation", "map": "hydroponics", "console": "water_console",
+      "power": 14, "priority": 2, "decay": 0.4, "start_condition": 46, "condition_cap": 52,
+      "produces": {"water": 15.5}, "skill": "engineering", "operator": 0.1,
+      "desc": "Every drop on the station has been drunk before. The main pump seal is failing, so the plant is recovering much less than the crew and the grow beds use. Fitting a new seal would fix it properly."
+    },
+    "grid": {
+      "name": "Habitat Grid", "map": "engineering", "console": "grid_console",
+      "power": 12, "priority": 3, "decay": 0.12, "start_condition": 84, "lights": true, "operator": 0.0,
+      "desc": "Lighting, heating and door motors. When this browns out the station drops to red emergency lamps and morale goes with it."
+    },
+    "hydroponics": {
+      "name": "Hydroponics", "map": "hydroponics", "console": "hydro_console",
+      "power": 18, "priority": 4, "decay": 0.25, "start_condition": 80,
+      "consumes": {"water": 4.5}, "produces": {"air": 0.9},
+      "makes": [{"item": "ration_pack", "hours": 1.5, "into": "galley_dispenser", "max_stock": 14}],
+      "skill": "science", "operator": 0.6,
+      "desc": "The grow beds feed the station and freshen its air. They need light, water and somebody who knows what they are doing; rations go straight to the galley dispenser."
+    },
+    "medbay": {
+      "name": "Medbay", "map": "medlab", "console": "med_console",
+      "power": 8, "priority": 5, "decay": 0.15, "start_condition": 85, "skill": "medicine", "operator": 0.5,
+      "desc": "Two beds, a scanner arch and a cabinet with less in it than there should be."
+    },
+    "fabricator": {
+      "name": "Fabricator", "map": "engineering", "console": "fab_console",
+      "power": 20, "priority": 6, "decay": 0.3, "start_condition": 70,
+      "makes": [{"item": "spare_parts", "hours": 4.0, "needs": {"scrap_metal": 2}, "from": "fab_feed",
+                 "into": "parts_locker", "max_stock": 6}],
+      "skill": "tech", "operator": 1.0,
+      "desc": "Turns scrap into spare parts, slowly, if it has power and an operator. Without it every repair on the station comes out of a finite pile."
+    },
+    "drill": {
+      "name": "Bore Rig", "map": "excavation", "console": "drill_console",
+      "power": 16, "priority": 7, "decay": 0.35, "start_condition": 64,
+      "produces": {"water": 7.0},
+      "makes": [{"item": "scrap_metal", "hours": 7.0, "into": "dig_crate", "max_stock": 8}],
+      "skill": "survival", "operator": 1.0,
+      "desc": "The reason the station exists. The rig chews ice into water for the tanks and turns up the odd lump of usable metal. It is far down the power queue and usually the first thing to stall."
+    },
+    "comms": {
+      "name": "Comms Array", "map": "command", "console": "comms_console",
+      "power": 8, "priority": 8, "decay": 0.03, "start_condition": 9, "condition_cap": 12, "skill": "tech", "operator": 0.3,
+      "desc": "The deep-space transceiver. A micrometeorite took out the amplifier core eight months ago and nobody has heard from the Combine - or anyone - since."
+    },
+    "lab": {
+      "name": "Research Lab", "map": "medlab", "console": "lab_console",
+      "power": 34, "priority": 2, "decay": 0.2, "start_condition": 88, "skill": "science", "operator": 1.0,
+      "desc": "The signal analysis rig draws more than hydroponics and the fabricator together. Somebody has moved it to second place in the power queue, ahead of nearly everything."
+    }
+  }
+}

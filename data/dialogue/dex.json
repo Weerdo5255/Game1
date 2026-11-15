@@ -1,0 +1,149 @@
+{
+  "start": [
+    {"if": "flag('dex_arrested')", "goto": "jail"},
+    {"if": "not flag('met_dex')", "goto": "first"},
+    {"goto": "hub"}
+  ],
+  "nodes": {
+    "first": {
+      "text": [
+        "Well now. The auditor, in the flesh. Dex Marlow, quartermaster. If it comes onto this station or goes off it, it crosses my desk first.",
+        "Anything you need, you ask Dex. Rations, a warm suit for the dig, something to help you sleep. Prices are fair. Fairer for friends."
+      ],
+      "do": ["set_flag('met_dex')"],
+      "next": "hub"
+    },
+    "hub": {
+      "variants": [
+        {"if": "flag('dex_reformed')", "text": "Stores are open, shelves are honest, and I have never been so bored. What do you need?"},
+        {"if": "flag('leaving_with_dex')", "text": "Day five. Two in the morning. The Magpie. Do not be late and do not bring luggage."},
+        {"if": "rel() <= -25", "text": "Auditor. I am very busy counting things."},
+        {"text": "My favourite customer. What will it be?"}
+      ],
+      "choices": [
+        {"text": "Show me what you have.", "do": ["open_trade()"], "goto": "hub"},
+        {"text": "I need the pump seal you are sitting on.", "if": "quest_active('q_water') and container_count('dex_locker', 'pump_seal') > 0", "goto": "seal"},
+        {"text": "Engineering needs the parts on your shelf.", "if": "quest_active('q_reactor') and not flag('stores_open') and not flag('dex_gave_parts')", "goto": "parts"},
+        {"text": "Stims are walking out of the medbay.", "if": "stage('q_medical', 'ask_around') or stage('q_medical', 'tuck')", "goto": "stims"},
+        {"text": "I know about the Magpie, Dex.", "if": "(flag('knows_dex_scheme') or flag('saw_magpie_cargo')) and not flag('dex_reformed') and not flag('dex_confronted')", "goto": "confront"},
+        {"text": "About the Magpie.", "if": "flag('dex_confronted') and not flag('dex_reformed') and not flag('leaving_with_dex') and not flag('dex_exposed')", "goto": "confront_2"},
+        {"text": "[Lift the key from his belt while he talks]", "if": "not has_item('dex_key') and npc_has('dex', 'dex_key')", "check": ["stealth", 14], "pass": "key_pass", "fail": "key_fail"},
+        {"text": "What are you up to these days?", "goto": "doing"},
+        {"text": "Later, Dex.", "goto": "end"}
+      ]
+    },
+    "seal": {
+      "text": "The pump seal. Ah. That one is allocated. Promised to a buyer on the next drone, in fact. I could un-promise it for seventy credits.",
+      "choices": [
+        {"text": "Seventy. Done.", "cost": 70, "do": ["remove_from('dex_locker', 'pump_seal', 1)", "give_item('pump_seal')", "set_stage('q_water', 'fit_seal')"], "goto": "seal_done"},
+        {"text": "It is for the water plant, Dex. You drink that water too.", "check": ["persuasion", 13], "pass": "seal_cheap", "fail": "seal_no"},
+        {"text": "Hand it over, or Halloran reads your manifest.", "if": "flag('knows_dex_scheme')", "do": ["remove_from('dex_locker', 'pump_seal', 1)", "give_item('pump_seal')", "set_stage('q_water', 'fit_seal')", "add_rel(-15)"], "goto": "seal_threat"},
+        {"text": "Forget it.", "goto": "hub"}
+      ]
+    },
+    "seal_done": {"text": "Pleasure. Mind you tell Wren who found it for her.", "next": "hub"},
+    "seal_cheap": {
+      "text": "...When you put it like that. Thirty, and you never tell anyone I have a conscience.",
+      "choices": [
+        {"text": "Thirty.", "cost": 30, "do": ["remove_from('dex_locker', 'pump_seal', 1)", "give_item('pump_seal')", "set_stage('q_water', 'fit_seal')", "add_rel(4)"], "goto": "seal_done"},
+        {"text": "I do not have it.", "goto": "hub"}
+      ]
+    },
+    "seal_no": {"text": "I drink bottled. Seventy.", "next": "seal"},
+    "seal_threat": {"text": "...Take it. You and I are going to have a different kind of relationship from now on.", "next": "hub"},
+    "parts": {
+      "text": "Kowal's requisitions are pending countersignature. I do not make the rules. I merely enjoy them.",
+      "choices": [
+        {"text": "The Administrator gave me the boards. Countersign it yourself.", "if": "flag('audit_authority')", "check": ["intimidation", 13], "pass": "parts_yes", "fail": "parts_no"},
+        {"text": "What would it cost to un-pend them?", "cost": 50, "goto": "parts_yes"},
+        {"text": "Never mind.", "goto": "hub"}
+      ]
+    },
+    "parts_no": {"text": "Bring me her signature, not your tone of voice.", "do": ["add_rel(-5)"], "next": "hub"},
+    "parts_yes": {
+      "text": "Two sets of spares, signed out to engineering. See? The system works.",
+      "do": ["set_flag('dex_gave_parts')", "remove_from('stores_parts', 'spare_parts', 2)", "put_item('parts_locker', 'spare_parts', 2)", "log('Dex released two sets of spare parts to engineering.')", "if stage('q_reactor', 'parts'): set_stage('q_reactor', 'stabilise')"],
+      "next": "hub"
+    },
+    "stims": {
+      "text": "Terrible. Shocking. I shall add it to the list of things I know nothing about.",
+      "choices": [
+        {"text": "Tuck is paying somebody for them. Is it you?", "check": ["persuasion", 12], "pass": "stims_yes", "fail": "stims_no"},
+        {"text": "Lie to me again and I start counting your shelves.", "check": ["intimidation", 13], "pass": "stims_yes", "fail": "stims_no"},
+        {"text": "Mm.", "goto": "hub"}
+      ]
+    },
+    "stims_no": {"text": "Count away. They balance. They always balance.", "next": "hub"},
+    "stims_yes": {
+      "text": "...He came to me. Could not sleep, could not stay awake, begged. I am a businessman, not a monster. Mostly. Go and look at the man's hands and tell me I did wrong.",
+      "do": ["set_flag('knows_tuck_stims')", "if stage('q_medical', 'ask_around'): set_stage('q_medical', 'tuck')", "add_xp(20)"],
+      "next": "hub"
+    },
+    "confront": {
+      "text": [
+        "Keep. Your voice. Down.",
+        "...Fine. Yes. This rock is finished, Auditor. You know it, I know it, the Combine knew it before they sent you. I have a buyer on Rhea, a shuttle that flies and just enough in her hold to get there. Nobody gets hurt."
+      ],
+      "do": ["set_flag('dex_confronted')", "set_flag('knows_dex_scheme')", "if not quest_started('q_smuggler'): start_quest('q_smuggler')", "set_stage('q_smuggler', 'proof')"],
+      "next": "confront_2"
+    },
+    "confront_2": {
+      "text": "So. What does the auditor do with a thing like that?",
+      "choices": [
+        {"text": "Put it all back. Open the stores. Nobody else has to know.", "check": ["persuasion", 15], "pass": "reform", "fail": "reform_no"},
+        {"text": "You have a friend here, Dex. Put it back - for me.", "if": "rel() >= 30", "goto": "reform"},
+        {"text": "Is there room for one more on the Magpie?", "goto": "join"},
+        {"text": "What is my silence worth?", "goto": "bribe"},
+        {"text": "I am taking this to Halloran.", "do": ["add_rel(-20)"], "goto": "end"},
+        {"text": "I need to think.", "goto": "end"}
+      ]
+    },
+    "reform_no": {"text": "And stay to die with the rest of you? Find a better argument.", "next": "hub"},
+    "reform": {
+      "text": [
+        "...Ten years I have been running from one bad debt to the next. You know what Osei said when I turned up here? 'Can you count?' That was the whole interview.",
+        "Damn you. Fine. It goes back, all of it. And if this station dies anyway I am blaming you personally."
+      ],
+      "do": ["set_flag('dex_reformed')", "cancel_goal('dex', 'prep_shuttle')", "move_items('shuttle_hold', 'stores_food', 'ration_pack')", "move_items('shuttle_hold', 'stores_fuel', 'fuel_cell')", "move_items('shuttle_hold', 'stores_parts', 'spare_parts')", "move_items('dex_locker', 'stores_parts', 'spare_parts')", "set_obj('stores_parts', 'access', 'engineering,stores')", "set_flag('stores_open')", "add_rel(15)", "complete_quest('q_smuggler')", "add_morale(5, 'all')"],
+      "next": "end"
+    },
+    "join": {
+      "text": "Now that is the smartest thing a Combine man has ever said to me. Day five, two in the morning, at the shuttle. Bring nothing you cannot carry. And Auditor - if Halloran hears a whisper, the seat is gone.",
+      "do": ["set_flag('leaving_with_dex')", "add_rel(10)", "journal('Dex will launch the Magpie on Day 5 at 02:00. There is a seat for you if you are at the shuttle.')"],
+      "next": "end"
+    },
+    "bribe": {
+      "text": "A hundred and fifty now, and the pump seal Wren keeps crying about. And we never spoke.",
+      "do": ["set_flag('dex_deal')", "give_credits(150)", "if container_count('dex_locker', 'pump_seal') > 0: remove_from('dex_locker', 'pump_seal', 1)", "if not has_item('pump_seal') and not flag('pump_fixed'): give_item('pump_seal')", "add_rel(5)"],
+      "next": "end"
+    },
+    "key_pass": {
+      "speaker": "narrator",
+      "text": "He is mid-anecdote about a cargo of misdirected pears when the key leaves his belt. He does not miss a beat. Neither do you.",
+      "do": ["take_from('dex', 'dex_key', 1)", "add_xp(30)"],
+      "next": "hub"
+    },
+    "key_fail": {
+      "text": "...Was that your hand? On my belt? I have picked pockets on four moons, friend. Do not insult the craft.",
+      "do": ["add_rel(-15)", "add_var('thefts_seen', 1)", "emit('theft')"],
+      "next": "end"
+    },
+    "doing": {
+      "variants": [
+        {"if": "time_between(1, 5)", "text": "At this hour? Inventory. Somebody has to. Go to bed, Auditor."},
+        {"text": "{activity()}. A quartermaster's work is never done, and never audited. Until now, ha."}
+      ],
+      "next": "hub"
+    },
+    "jail": {
+      "text": "Come to look at the animal in the cage? I was getting out, that is all. Everybody on this station is dying slowly and I am the criminal for noticing.",
+      "choices": [
+        {"text": "Who was your buyer?", "goto": "jail_buyer"},
+        {"text": "Who else was in on it?", "goto": "jail_who"},
+        {"text": "Enjoy the cell.", "goto": "end"}
+      ]
+    },
+    "jail_buyer": {"text": "A salvage concern on Rhea that pays in hard credit for fuel and does not ask where it has been. The Combine does business with them too. Put that in your report.", "next": "jail"},
+    "jail_who": {"text": "Nobody. That is the joke. Ten people on this rock and not one I trusted enough to offer a seat. Draw your own conclusions about which of us is the fool.", "next": "jail"}
+  }
+}

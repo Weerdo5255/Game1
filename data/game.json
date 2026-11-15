@@ -1,0 +1,74 @@
+{
+  "title": "Tethys Deep",
+  "subtitle": "Ithaca Station  •  Tethys  •  Saturn",
+  "premise": "Ithaca Station clings to the lip of a canyon on Saturn's moon Tethys: ten people, one tired reactor and a drill that has been biting into the ice for forty years. The Meridian Combine wants to know whether to keep paying for it.\n\nYou are the auditor they sent. The tug that dropped you comes back in five days. What your report says - and whether there is still a station to report on - is up to you.",
+  "time_scale": 1.0,
+  "start": {"map": "hangar", "spawn": "player_start", "day": 1, "hour": 7, "minute": 30},
+  "deadline": {"day": 6, "hour": 8},
+  "intro": "intro",
+  "mess_region": "mess_hall",
+  "medbay_bed": "medbay_bed",
+  "part_item": "spare_parts",
+  "food_item": "ration_pack",
+  "player": {
+    "name": "Rin Okabe",
+    "title": "Combine Auditor",
+    "appearance": {
+      "body": "human", "skin": "tan", "hair": "short", "hair_color": "black",
+      "outfit": "uniform", "primary": "teal", "secondary": "white", "legs": "slate", "extras": []
+    },
+    "attrs": {"body": 4, "dexterity": 4, "intellect": 4, "presence": 4, "resolve": 4},
+    "skills": {},
+    "inventory": {"audit_datapad": 1, "ration_pack": 1},
+    "credits": 120,
+    "access": ["crew"],
+    "home": {"bed": "bed_player"}
+  },
+  "backgrounds": [
+    {
+      "id": "engineer",
+      "name": "Systems Engineer",
+      "desc": "You spent ten years keeping other people's machines alive before the Combine put you behind a clipboard. Your hands remember.",
+      "attrs": {"dexterity": 2, "intellect": 1},
+      "skills": {"engineering": 4, "tech": 3, "athletics": 1},
+      "items": {"multitool": 1, "spare_parts": 1},
+      "equipped": {"tool": "multitool"}
+    },
+    {
+      "id": "medic",
+      "name": "Field Medic",
+      "desc": "Colony medicine: too few supplies, too many patients, and everyone lies about how they feel. You learned to read people.",
+      "attrs": {"intellect": 2, "presence": 1},
+      "skills": {"medicine": 4, "science": 2, "persuasion": 2},
+      "items": {"medkit": 2, "med_scanner": 1},
+      "equipped": {"tool": "med_scanner"}
+    },
+    {
+      "id": "negotiator",
+      "name": "Contract Negotiator",
+      "desc": "You close deals for a living. Everybody wants something; your talent is finding out what before they know you are looking.",
+      "attrs": {"presence": 2, "resolve": 1},
+      "skills": {"persuasion": 4, "intimidation": 2, "stealth": 1, "tech": 1},
+      "items": {"synth_whiskey": 1},
+      "credits": 160
+    },
+    {
+      "id": "scout",
+      "name": "Survey Scout",
+      "desc": "Before the desk job you walked the ice for the survey corps. Cold, dark and quiet do not bother you, and neither do locked doors.",
+      "attrs": {"body": 1, "dexterity": 1, "resolve": 1},
+      "skills": {"survival": 4, "stealth": 3, "athletics": 2},
+      "items": {"thermal_suit": 1},
+      "equipped": {"suit": "thermal_suit"}
+    },
+    {
+      "id": "analyst",
+      "name": "Signals Analyst",
+      "desc": "You used to pull meaning out of noise for the Combine's deep relay. Numbers behave for you, and so do computers.",
+      "attrs": {"intellect": 2, "resolve": 1},
+      "skills": {"tech": 4, "science": 3, "stealth": 1},
+      "items": {"diag_scanner": 1},
+      "equipped": {"tool": "diag_scanner"}
+    }
+  ]
+}

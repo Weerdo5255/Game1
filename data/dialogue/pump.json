@@ -1,0 +1,25 @@
+{
+  "start": [
+    {"if": "flag('pump_fixed')", "goto": "fixed"},
+    {"goto": "leaking"}
+  ],
+  "nodes": {
+    "leaking": {
+      "speaker": "narrator",
+      "text": "The main reclamation pump shudders on every stroke. A thread of water creeps from the housing where a seal ought to be, freezing into a grey tongue on the deck.",
+      "choices": [
+        {"text": "Fit the new pump seal.", "item": ["pump_seal", 1], "skill": ["engineering", 3], "consume": true, "goto": "fit"},
+        {"text": "Leave it.", "goto": "end"}
+      ]
+    },
+    "fit": {
+      "speaker": "narrator",
+      "text": "Twenty minutes of skinned knuckles. The old seal comes away in three pieces; the new one seats with a click you feel through the wrench. The pump's stutter smooths out into a steady pulse.",
+      "do": ["pass_time(20)", "set_cap('water_reclaim', 100)", "repair('water_reclaim', 40)", "set_flag('pump_fixed')", "add_rel(15, 'wren')", "sound('repair')"]
+    },
+    "fixed": {
+      "speaker": "narrator",
+      "text": "The pump runs with a steady, unhurried pulse. The deck beneath it is dry."
+    }
+  }
+}

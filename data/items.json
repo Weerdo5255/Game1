@@ -1,0 +1,238 @@
+{
+  "_comment": "Item definitions. See game/world/items.py for the fields. 'use' entries are script statements (story/api.py).",
+
+  "ration_pack": {
+    "name": "Ration Pack", "kind": "consumable", "weight": 0.4, "value": 8,
+    "icon": "ration", "color": "amber",
+    "desc": "Pressed algae protein and whatever hydroponics managed this week. Filling, at least.",
+    "use": ["add_need('hunger', -48)"], "use_text": "You eat the ration.",
+    "tags": ["food"]
+  },
+  "nutrient_paste": {
+    "name": "Nutrient Paste", "kind": "consumable", "weight": 0.2, "value": 3,
+    "icon": "ration", "color": "olive",
+    "desc": "Grey. Technically complete nutrition. Nobody has ever asked for seconds.",
+    "use": ["add_need('hunger', -26)"], "use_text": "You swallow the paste without tasting it, which is the trick.",
+    "tags": ["food"]
+  },
+  "fresh_greens": {
+    "name": "Fresh Greens", "kind": "consumable", "weight": 0.2, "value": 14,
+    "icon": "plant", "color": "green",
+    "desc": "Real leaves, grown under real lamps. On Tethys this is a luxury.",
+    "use": ["add_need('hunger', -22)", "add_effect('well_fed', 6)"], "use_text": "Crisp, green and alive. It helps.",
+    "tags": ["food", "gift"]
+  },
+  "coffee_bulb": {
+    "name": "Coffee Bulb", "kind": "consumable", "weight": 0.2, "value": 10,
+    "icon": "flask", "color": "brown",
+    "desc": "A squeeze bulb of something dark and hot. Calling it coffee is generous.",
+    "use": ["add_need('fatigue', -16)", "add_effect('caffeinated', 3)"], "use_text": "Bitter. Wonderful.",
+    "tags": ["drink", "gift"]
+  },
+  "stim": {
+    "name": "Stim Injector", "kind": "consumable", "weight": 0.1, "value": 35,
+    "icon": "stim", "color": "magenta",
+    "desc": "Medical stimulant. Keeps you sharp and upright long after you should be neither.",
+    "use": ["add_need('fatigue', -45)", "add_effect('stimmed', 4)"], "use_text": "Your pulse climbs. The tiredness steps back.",
+    "tags": ["medical", "stim"]
+  },
+  "sedative": {
+    "name": "Sedative", "kind": "consumable", "weight": 0.1, "value": 25,
+    "icon": "stim", "color": "navy",
+    "desc": "A mild sleep aid from the medbay. Take it lying down.",
+    "use": ["add_need('fatigue', 25)", "add_effect('calm', 8)"], "use_text": "The edges of everything soften.",
+    "tags": ["medical"]
+  },
+  "medkit": {
+    "name": "Medkit", "kind": "consumable", "weight": 0.6, "value": 40,
+    "icon": "medkit", "color": "white",
+    "desc": "Sealant foam, dermal patches, a little of everything.",
+    "use": ["heal(22)"], "use_text": "You patch yourself up.",
+    "tags": ["medical"]
+  },
+  "synth_whiskey": {
+    "name": "Synth Whiskey", "kind": "consumable", "weight": 0.5, "value": 45,
+    "icon": "flask", "color": "amber",
+    "desc": "Distilled in somebody's locker. A currency in its own right out here.",
+    "use": ["add_need('fatigue', 8)", "add_effect('calm', 4)"], "use_text": "It burns all the way down.",
+    "tags": ["gift", "contraband"]
+  },
+
+  "spare_parts": {
+    "name": "Spare Parts", "kind": "material", "weight": 1.5, "value": 30,
+    "icon": "parts", "color": "steel",
+    "desc": "Couplings, seals and regulator boards. Fit one at a system console to restore integrity.",
+    "tags": ["part"]
+  },
+  "scrap_metal": {
+    "name": "Scrap Metal", "kind": "material", "weight": 2.0, "value": 6,
+    "icon": "scrap", "color": "steel",
+    "desc": "Feedstock for the fabricator: two of these become one set of spare parts.",
+    "tags": ["scrap"]
+  },
+  "fuel_cell": {
+    "name": "Fuel Cell", "kind": "material", "weight": 3.0, "value": 80,
+    "icon": "cell", "color": "cyan",
+    "desc": "A deuterium-helium charge for the reactor. Each one keeps the lights on for about a day.",
+    "tags": ["fuel"]
+  },
+  "ice_core": {
+    "name": "Ice Core", "kind": "material", "weight": 1.0, "value": 5,
+    "icon": "ore", "color": "cyan",
+    "desc": "A cylinder of ancient ice. The deeper cores have fine purple threads in them.",
+    "tags": ["sample"]
+  },
+  "seed_stock": {
+    "name": "Seed Stock", "kind": "material", "weight": 0.2, "value": 20,
+    "icon": "plant", "color": "olive",
+    "desc": "Vacuum-sealed seed for the grow beds.",
+    "tags": ["seed"]
+  },
+  "pump_seal": {
+    "name": "Pump Seal", "kind": "quest", "weight": 0.5, "value": 60,
+    "icon": "seal", "color": "orange",
+    "desc": "A reinforced seal for the main reclamation pump. The old one has been weeping for months.",
+    "tags": ["quest_part"]
+  },
+
+  "multitool": {
+    "name": "Multitool", "kind": "tool", "weight": 0.8, "value": 60,
+    "icon": "tool", "color": "amber", "slot": "tool",
+    "desc": "Driver, cutter, probe and pry bar in one worn handle.",
+    "mods": {"skill.engineering": 1}, "tags": ["tool"]
+  },
+  "diag_scanner": {
+    "name": "Diagnostic Scanner", "kind": "tool", "weight": 0.5, "value": 75,
+    "icon": "datapad", "color": "cyan", "slot": "tool",
+    "desc": "Reads fault codes out of anything with a data port.",
+    "mods": {"skill.tech": 1}, "tags": ["tool"]
+  },
+  "med_scanner": {
+    "name": "Med Scanner", "kind": "tool", "weight": 0.4, "value": 75,
+    "icon": "datapad", "color": "green", "slot": "tool",
+    "desc": "Pulse, oxygen, cortisol and three things you had forgotten you could measure.",
+    "mods": {"skill.medicine": 1}, "tags": ["tool"]
+  },
+  "stun_baton": {
+    "name": "Stun Baton", "kind": "tool", "weight": 1.0, "value": 90,
+    "icon": "baton", "color": "black", "slot": "tool",
+    "desc": "Security issue. People tend to listen when you are holding one.",
+    "mods": {"skill.intimidation": 2}, "tags": ["weapon"]
+  },
+  "thermal_suit": {
+    "name": "Thermal Suit", "kind": "equipment", "weight": 3.0, "value": 110,
+    "icon": "suit", "color": "orange", "slot": "suit",
+    "desc": "Heated undersuit and shell. Without one the dig will kill you slowly.",
+    "mods": {"cold_resist": 1, "skill.survival": 1}, "tags": ["suit"]
+  },
+  "respirator": {
+    "name": "Respirator", "kind": "equipment", "weight": 0.8, "value": 85,
+    "icon": "lens", "color": "teal", "slot": "accessory",
+    "desc": "A rebreather with its own scrubber. Bad air stops being your problem.",
+    "mods": {"air_supply": 1}, "tags": ["safety"]
+  },
+  "tool_belt": {
+    "name": "Tool Belt", "kind": "equipment", "weight": 0.6, "value": 40,
+    "icon": "coil", "color": "brown", "slot": "accessory",
+    "desc": "Loops, pouches and clips. You can carry a lot more hanging off this.",
+    "mods": {"carry": 8}, "tags": []
+  },
+  "lucky_coin": {
+    "name": "Driller's Coin", "kind": "equipment", "weight": 0.1, "value": 25,
+    "icon": "credits", "color": "amber", "slot": "accessory",
+    "desc": "A token pressed from the first core ever pulled at Ithaca. Tuck swears by his.",
+    "mods": {"attr.resolve": 1}, "tags": ["gift"]
+  },
+
+  "keycard_eng": {
+    "name": "Engineering Keycard", "kind": "key", "weight": 0.0, "value": 0,
+    "icon": "card", "color": "amber",
+    "desc": "Opens anything engineering has locked.",
+    "tags": ["access:engineering"], "quest": true
+  },
+  "keycard_sec": {
+    "name": "Security Keycard", "kind": "key", "weight": 0.0, "value": 0,
+    "icon": "card", "color": "red",
+    "desc": "Opens the brig and the security locker.",
+    "tags": ["access:security"], "quest": true
+  },
+  "keycard_cmd": {
+    "name": "Command Keycard", "kind": "key", "weight": 0.0, "value": 0,
+    "icon": "card", "color": "navy",
+    "desc": "The administrator's override card.",
+    "tags": ["access:command", "access:stores"], "quest": true
+  },
+  "keycard_sci": {
+    "name": "Science Keycard", "kind": "key", "weight": 0.0, "value": 0,
+    "icon": "card", "color": "purple",
+    "desc": "Opens the lab lockers.",
+    "tags": ["access:science"], "quest": true
+  },
+  "keycard_med": {
+    "name": "Medical Keycard", "kind": "key", "weight": 0.0, "value": 0,
+    "icon": "card", "color": "green",
+    "desc": "Opens the medicine cabinet.",
+    "tags": ["access:medical"], "quest": true
+  },
+  "dex_key": {
+    "name": "Quartermaster's Key", "kind": "key", "weight": 0.0, "value": 0,
+    "icon": "key", "color": "steel",
+    "desc": "An old-fashioned physical key. Dex does not trust anything that can be reprogrammed.",
+    "tags": [], "quest": true
+  },
+  "magpie_key": {
+    "name": "Magpie Start Key", "kind": "key", "weight": 0.0, "value": 0,
+    "icon": "key", "color": "amber",
+    "desc": "Ignition interlock for the shuttle Magpie.",
+    "tags": [], "quest": true
+  },
+
+  "audit_datapad": {
+    "name": "Audit Datapad", "kind": "data", "weight": 0.3, "value": 0,
+    "icon": "datapad", "color": "teal",
+    "desc": "Your Combine-issue datapad: crew locator, station telemetry and a blank report waiting for a verdict.",
+    "tags": [], "quest": true
+  },
+  "cargo_manifest": {
+    "name": "Doctored Manifest", "kind": "data", "weight": 0.1, "value": 0,
+    "icon": "note", "color": "tan",
+    "desc": "Two columns: what the stores received, and what Dex logged. The difference is a shuttle-load, and a margin note reads 'Magpie - night cycle'.",
+    "tags": ["evidence"], "quest": true
+  },
+  "field_notes": {
+    "name": "Lin's Field Notes", "kind": "data", "weight": 0.2, "value": 0,
+    "icon": "manual", "color": "purple",
+    "desc": "Page after page of waveforms. In the margins: 'it repeats', then 'it does NOT repeat', then, underlined twice, 'it answers'.",
+    "tags": ["evidence"], "quest": true
+  },
+  "station_charter": {
+    "name": "Station Charter", "kind": "data", "weight": 0.3, "value": 0,
+    "icon": "manual", "color": "navy",
+    "desc": "The founding charter of Ithaca Station. Clause 9: a majority of resident crew may refuse decommissioning if the station is self-sustaining.",
+    "tags": ["evidence"], "quest": true
+  },
+  "combine_orders": {
+    "name": "Sealed Combine Orders", "kind": "data", "weight": 0.1, "value": 0,
+    "icon": "chip", "color": "red",
+    "desc": "Decrypted traffic for the tug's captain: 'Retrieval team to secure SUBJECT ICE. Audit is cover. Crew to be relocated regardless of findings.'",
+    "tags": ["evidence"], "quest": true
+  },
+  "signal_amplifier": {
+    "name": "Amplifier Core", "kind": "quest", "weight": 1.2, "value": 0,
+    "icon": "amplifier", "color": "purple",
+    "desc": "The phase-locked heart of a deep space transceiver. There is exactly one on the station. Pip needs it for the comms array; Lin needs it to hear the ice.",
+    "tags": ["quest_part"], "quest": true
+  },
+  "artifact_shard": {
+    "name": "Artifact Shard", "kind": "quest", "weight": 0.3, "value": 0,
+    "icon": "shard", "color": "purple",
+    "desc": "A sliver of something that is not ice and not stone. It is very slightly warm, and it hums when you are not listening.",
+    "tags": ["artifact"], "quest": true
+  },
+  "mining_charge": {
+    "name": "Mining Charge", "kind": "quest", "weight": 2.0, "value": 0,
+    "icon": "charge", "color": "red",
+    "desc": "Shaped demolition charge. Two of them would bring down a tunnel for good.",
+    "tags": ["explosive"], "quest": true
+  }
+}

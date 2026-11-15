@@ -1,0 +1,63 @@
+{
+  "id": "pell",
+  "name": "Dr. Jonah Pell",
+  "title": "Station Physician",
+  "role": "medic",
+  "faction": "science",
+  "bio": "Signed on for two years to pay off a debt. That was nine years ago. Keeps a tally of everything the cabinet is missing.",
+  "appearance": {
+    "body": "human",
+    "skin": "umber",
+    "hair": "short",
+    "hair_color": "grey",
+    "outfit": "labcoat",
+    "primary": "teal",
+    "secondary": "white",
+    "legs": "slate",
+    "extras": [
+      "glasses"
+    ]
+  },
+  "attrs": {
+    "body": 4,
+    "dexterity": 6,
+    "intellect": 8,
+    "presence": 6,
+    "resolve": 6
+  },
+  "skills": {
+    "medicine": 8,
+    "science": 5,
+    "persuasion": 4
+  },
+  "access": [
+    "crew",
+    "medical"
+  ],
+  "spawn": {
+    "map": "medlab",
+    "x": 11,
+    "y": 6,
+    "facing": "up"
+  },
+  "home": {
+    "bed": "bed_pell"
+  },
+  "job": {
+    "system": "medbay"
+  },
+  "schedule": "day",
+  "inventory": {
+    "keycard_med": 1,
+    "medkit": 1
+  },
+  "credits": 70,
+  "relations": {
+    "player": 5,
+    "wren": 25,
+    "tuck": 20,
+    "lin": -5
+  },
+  "dialogue": "pell",
+  "blip": "blip_low"
+}

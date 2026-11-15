@@ -1,0 +1,19 @@
+{
+  "start": "a",
+  "nodes": {
+    "a": {
+      "speaker": "narrator",
+      "text": "A core sample under a bell jar. The ice has sublimed away from a seam of violet crystal that is absolutely not on the mineral survey. A label in Lin's handwriting: 'Depth 1,012 m. DO NOT LOG.'",
+      "do": ["set_flag('saw_lab_sample')", "if not quest_started('q_signal'): start_quest('q_signal')"],
+      "choices": [
+        {"text": "Look closer.", "skill": ["science", 4], "once": true, "goto": "closer"},
+        {"text": "Leave it alone.", "goto": "end"}
+      ]
+    },
+    "closer": {
+      "speaker": "narrator",
+      "text": "The lattice is too regular to be natural and too irregular to be manufactured. Under the bench lamp it rings, very faintly, at about the pitch of a held breath.",
+      "do": ["add_xp(25)", "set_flag('knows_signal')"]
+    }
+  }
+}

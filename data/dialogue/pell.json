@@ -1,0 +1,89 @@
+{
+  "start": [
+    {"if": "not flag('met_pell')", "goto": "first"},
+    {"goto": "hub"}
+  ],
+  "nodes": {
+    "first": {
+      "text": [
+        "Ah. The auditor. Jonah Pell; I am what passes for a hospital. Please do not touch the scanner arch, it sulks.",
+        "Medically? Ten people, all underfed, all overtired, none of them willing to admit either. I can treat most things. What I cannot treat is a cabinet that keeps emptying itself."
+      ],
+      "do": ["set_flag('met_pell')", "set_flag('inspected_med')"],
+      "choices": [
+        {"text": "Emptying itself?", "goto": "missing"},
+        {"text": "How bad is the crew's health, honestly?", "goto": "health"}
+      ]
+    },
+    "missing": {
+      "text": [
+        "Six stim injectors in two months. I dispense perhaps one a year. Somebody on this station is keeping themselves awake on purpose, and whoever it is did not come to me.",
+        "I am a doctor, not a detective, and they all clam up when I ask. They might talk to a stranger with a datapad."
+      ],
+      "do": ["start_quest('q_medical')"],
+      "next": "hub"
+    },
+    "health": {
+      "text": "Chronic fatigue across the board. Tuck is the worst: I would ground him if I could find anyone else to run the bore. Dr. Suvari has stopped coming to her check-ups, which is its own diagnosis. And the Administrator is running on willpower, which is not a food group.",
+      "next": "missing"
+    },
+
+    "hub": {
+      "variants": [
+        {"if": "res('air') < 60", "text": "Breathe slowly. The scrubbers are losing. I have people coming in with headaches every hour."},
+        {"if": "hp_pct() < 60", "text": "Sit down before you fall down. You look worse than my patients."},
+        {"if": "eff('medbay') < 0.2", "text": "No power to the beds. I am practising medicine by lamplight like a ship's surgeon."},
+        {"text": "Auditor. Nothing broken, I hope?"}
+      ],
+      "choices": [
+        {"text": "Patch me up, Doctor.", "if": "hp_pct() < 95", "goto": "heal"},
+        {"text": "It is Tuck taking the stims.", "if": "stage('q_medical', 'decide') and not flag('tuck_secret_kept')", "goto": "tell_truth"},
+        {"text": "The stims were a clerical error. Dex mis-shelved a crate.", "if": "stage('q_medical', 'decide')", "check": ["persuasion", 13], "pass": "lie_ok", "fail": "lie_fail"},
+        {"text": "Tuck cannot sleep. Is there something gentler than stims?", "if": "flag('tuck_confided') and not flag('got_sedative')", "goto": "sedative"},
+        {"text": "I trained as a medic. Let me carry a cabinet key.", "if": "background() == 'medic' and not has_item('keycard_med') and rel() >= 10", "goto": "key"},
+        {"text": "What do you make of the dig?", "if": "flag('knows_signal')", "goto": "dig"},
+        {"text": "Take care, Doctor.", "goto": "end"}
+      ]
+    },
+    "heal": {
+      "variants": [
+        {"if": "eff('medbay') >= 0.3", "text": "Hold still. ...There. An hour under the arch and you will pass for healthy."},
+        {"text": "The arch is dark, so this is needle and thread. It will hold. It will also hurt."}
+      ],
+      "do": ["pass_time(60)", "heal(40 if eff('medbay') >= 0.3 else 15)", "add_need('fatigue', -10)"],
+      "next": "hub"
+    },
+    "tell_truth": {
+      "text": [
+        "Tuck. Of course it is Tuck. And he has been buying them, which means somebody has been selling my stock back to my own patients.",
+        "I am pulling him off the bore. He will hate me. He would hate dying of a cardiac event rather more."
+      ],
+      "do": ["set_flag('tuck_reported')", "set_schedule('tuck', 'resting')", "add_rel(12)", "add_rel(-20, 'tuck')", "complete_quest('q_medical')", "give_item('medkit', 2)", "if not quest_started('q_smuggler'): start_quest('q_smuggler')"],
+      "next": "end"
+    },
+    "lie_ok": {
+      "text": "A mis-shelved crate. ...That is suspiciously tidy. But I would rather believe it than not. Thank you for looking. Here, for your trouble.",
+      "do": ["set_flag('tuck_secret_kept')", "add_rel(4)", "add_rel(12, 'tuck')", "complete_quest('q_medical')", "give_item('medkit', 1)"],
+      "next": "end"
+    },
+    "lie_fail": {
+      "text": "I have been lied to by patients for thirty years, Auditor. You are not even in the top hundred. Who is it?",
+      "do": ["add_rel(-8)"],
+      "next": "hub"
+    },
+    "sedative": {
+      "text": "If he would only have come to me... Here. Two doses. They will not stop whatever he is dreaming, but they will let him sleep through it. Tell him it is from a friend. He does not have to know which.",
+      "do": ["set_flag('got_sedative')", "remove_from('med_cabinet', 'sedative', 2)", "give_item('sedative', 2)", "add_rel(5)"],
+      "next": "hub"
+    },
+    "key": {
+      "text": "A colleague. On Tethys. I had forgotten what that felt like. Take the spare - and log what you take, or I will revoke it and your good name together.",
+      "do": ["give_item('keycard_med')", "add_rel(8)"],
+      "next": "hub"
+    },
+    "dig": {
+      "text": "I have two patients with identical complaints: pressure behind the eyes, broken sleep, a sense of being... addressed. One runs the bore and one runs the lab. I do not have a word for it. Medicine tends to notice things before it can name them.",
+      "next": "hub"
+    }
+  }
+}

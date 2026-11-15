@@ -1,0 +1,15 @@
+{
+  "start": "arrival",
+  "nodes": {
+    "arrival": {
+      "speaker": "narrator",
+      "text": [
+        "The tug <c>Calypso's Thread</c> seals her lock behind you and drops away before the frost has finished blooming on the glass.",
+        "<c>Ithaca Station</c>. Ten souls, forty years of ice, and a Combine board that would very much like to stop paying for both.",
+        "You have <y>five days</y> until the tug swings back for you and your verdict. Across the hangar a broad man in a security vest has already started walking your way."
+      ],
+      "do": ["start_quest('q_audit')"],
+      "next": "end"
+    }
+  }
+}

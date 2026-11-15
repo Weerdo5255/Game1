@@ -1,0 +1,39 @@
+{
+  "start": [
+    {"if": "flag('signal_decoded') and near('lin', 9) and not flag('artifact_resolved')", "goto": "with_lin"},
+    {"goto": "look"}
+  ],
+  "nodes": {
+    "look": {
+      "speaker": "narrator",
+      "variants": [
+        {"if": "has_effect('signal_touched')", "text": "The lines on the spire are moving. No - they are holding still, and it is you that is being read."},
+        {"text": "Close up, the surface is not stone. It gives slightly under the eye, like deep water. The scored lines pulse, slow as breathing."}
+      ],
+      "choices": [
+        {"text": "Put your hand on it.", "goto": "touch"},
+        {"text": "Study the markings.", "skill": ["science", 5], "once": true, "goto": "study"},
+        {"text": "Step back.", "goto": "end"}
+      ]
+    },
+    "touch": {
+      "speaker": "narrator",
+      "text": [
+        "Warm. Faintly, impossibly warm.",
+        "For one heartbeat there is a sound behind your teeth, patient and very large, like a question being asked in a language made of waiting.",
+        "Then it is only a pillar in the dark again, and your hand is shaking."
+      ],
+      "do": ["add_effect('signal_touched', 18)", "set_flag('touched_artifact')"]
+    },
+    "study": {
+      "speaker": "narrator",
+      "text": "The marks are not writing. They are a carrier wave drawn in three dimensions - the same figure Lin has pinned over her bench, here cut a metre high. Whoever made this did not leave a message. They left a receiver.",
+      "do": ["add_xp(40)", "set_flag('knows_receiver')"]
+    },
+    "with_lin": {
+      "speaker": "narrator",
+      "text": "Lin is standing with her palm a centimetre from the surface, not quite touching. She has clearly been waiting for you.",
+      "do": ["start_dialogue('lin', 'lin', 'finale')"]
+    }
+  }
+}

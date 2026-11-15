@@ -1,0 +1,75 @@
+{
+  "id": "pip",
+  "name": "Pip Anders",
+  "title": "Junior Technician",
+  "role": "technician",
+  "faction": "engineering",
+  "bio": "Born on a transfer station, raised on repair manuals. Twenty-two, endlessly hopeful, and convinced that if the comms array worked everything else would follow.",
+  "appearance": {
+    "body": "human",
+    "skin": "porcelain",
+    "hair": "spiky",
+    "hair_color": "teal",
+    "outfit": "jumpsuit",
+    "primary": "cyan",
+    "secondary": "amber",
+    "legs": "slate",
+    "extras": []
+  },
+  "attrs": {
+    "body": 4,
+    "dexterity": 6,
+    "intellect": 7,
+    "presence": 5,
+    "resolve": 5
+  },
+  "skills": {
+    "tech": 6,
+    "engineering": 3,
+    "science": 3,
+    "stealth": 2
+  },
+  "access": [
+    "crew",
+    "engineering"
+  ],
+  "spawn": {
+    "map": "engineering",
+    "x": 20,
+    "y": 6,
+    "facing": "up"
+  },
+  "home": {
+    "bed": "bed_pip"
+  },
+  "job": {
+    "system": "fabricator",
+    "restock": [
+      "fabricator"
+    ]
+  },
+  "schedule": "day",
+  "inventory": {
+    "diag_scanner": 1,
+    "coffee_bulb": 1
+  },
+  "equipped": {
+    "tool": "diag_scanner"
+  },
+  "credits": 35,
+  "relations": {
+    "player": 10,
+    "bram": 35,
+    "lin": 10,
+    "dex": 5
+  },
+  "goals": [
+    {
+      "use": "repair_comms",
+      "id": "repair_comms",
+      "priority": 58
+    }
+  ],
+  "dialogue": "pip",
+  "blip": "blip_high"
+}

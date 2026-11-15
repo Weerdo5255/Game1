@@ -1,0 +1,26 @@
+{
+  "start": [
+    {"if": "has_item('keycard_sec') or flag('hal_thanked') or rel('halloran') >= 30", "goto": "log"},
+    {"goto": "locked"}
+  ],
+  "nodes": {
+    "locked": {
+      "speaker": "narrator",
+      "text": "SECURITY TERMINAL. Credentials required.",
+      "choices": [
+        {"text": "Talk your way past the login.", "skill": ["tech", 5], "goto": "log"},
+        {"text": "Leave it.", "goto": "end"}
+      ]
+    },
+    "log": {
+      "speaker": "narrator",
+      "text": [
+        "DAY BOOK. '...Anders and Suvari in the mess over the amplifier core. Separated them. Core impounded in my locker on the Administrator's order until someone decides.'",
+        "'...Stores count is off again. Rations, two fuel cells. Marlow's manifests balance to the gram. Nobody's manifests balance to the gram.'",
+        "'...Abara walking the Ring at 04:10. Third night. Asked if he was all right. He said the ice was loud.'"
+      ],
+      "do": ["set_flag('knows_amp')", "set_flag('hal_mentioned_tuck')", "if not quest_started('q_smuggler'): start_quest('q_smuggler')", "add_xp(15)"],
+      "next": "end"
+    }
+  }
+}

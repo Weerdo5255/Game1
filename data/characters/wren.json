@@ -1,0 +1,65 @@
+{
+  "id": "wren",
+  "name": "Wren Castellanos",
+  "title": "Botanist",
+  "role": "botanist",
+  "faction": "science",
+  "bio": "Grows half of what the station eats and all of what it enjoys eating. Notices everything, because plants die when you do not.",
+  "appearance": {
+    "body": "human",
+    "skin": "tan",
+    "hair": "ponytail",
+    "hair_color": "auburn",
+    "outfit": "uniform",
+    "primary": "green",
+    "secondary": "tan",
+    "legs": "brown",
+    "extras": []
+  },
+  "attrs": {
+    "body": 5,
+    "dexterity": 6,
+    "intellect": 6,
+    "presence": 6,
+    "resolve": 6
+  },
+  "skills": {
+    "science": 6,
+    "medicine": 3,
+    "engineering": 2,
+    "persuasion": 3,
+    "survival": 2
+  },
+  "access": [
+    "crew"
+  ],
+  "spawn": {
+    "map": "hydroponics",
+    "x": 11,
+    "y": 13,
+    "facing": "up"
+  },
+  "home": {
+    "bed": "bed_wren"
+  },
+  "job": {
+    "system": "hydroponics",
+    "duty": "maintain",
+    "maintain": [
+      "hydroponics"
+    ]
+  },
+  "schedule": "day",
+  "inventory": {
+    "fresh_greens": 1
+  },
+  "credits": 45,
+  "relations": {
+    "player": 5,
+    "tuck": 35,
+    "dex": -10,
+    "pell": 25
+  },
+  "dialogue": "wren",
+  "blip": "blip_high"
+}

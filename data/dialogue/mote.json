@@ -1,0 +1,47 @@
+{
+  "start": "hub",
+  "nodes": {
+    "hub": {
+      "variants": [
+        {"if": "res('air') < 60", "text": "ALERT. Atmosphere below tolerance for organic crew. This unit does not breathe. This unit is concerned regardless."},
+        {"if": "wants() != ''", "text": "MOTE-7. Task queue blocked: {item_name(wants())} required, none located. This unit has filed a requisition. The requisition is pending."},
+        {"text": "MOTE-7, maintenance unit, seventh of seven. Current task: {activity()}. State your request."}
+      ],
+      "choices": [
+        {"text": "Status report.", "goto": "report"},
+        {"text": "Change your maintenance priorities.", "skill": ["tech", 5], "goto": "reprogram"},
+        {"text": "What happened to the other six?", "once": true, "goto": "six"},
+        {"text": "Where is everyone?", "goto": "where"},
+        {"text": "Carry on.", "goto": "end"}
+      ]
+    },
+    "report": {
+      "text": [
+        "Reactor integrity {round(cond('reactor'))} percent. Life support {round(cond('life_support'))}. Water reclamation {round(cond('water_reclaim'))}. Hydroponics {round(cond('hydroponics'))}.",
+        "Power: {round(power_supply())} of {round(power_demand())} kilowatts requested. Air {round(res('air'))} percent. Water {round(res('water'))} litres. Assessment: {'nominal' if cond('reactor') >= 75 and res_pct('water') >= 40 else 'suboptimal' if cond('reactor') >= 40 else 'this unit recommends prayer'}."
+      ],
+      "next": "hub"
+    },
+    "reprogram": {
+      "text": "Maintenance priority table unlocked. Select the systems this unit should look after.",
+      "choices": [
+        {"text": "Reactor and life support.", "do": ["set_maintain('mote', 'reactor', 'life_support')", "add_xp(25)"], "goto": "reprogrammed"},
+        {"text": "Water reclamation and hydroponics.", "do": ["set_maintain('mote', 'water_reclaim', 'hydroponics')", "add_xp(25)"], "goto": "reprogrammed"},
+        {"text": "Fabricator and bore rig.", "do": ["set_maintain('mote', 'fabricator', 'drill')", "add_xp(25)"], "goto": "reprogrammed"},
+        {"text": "The default table.", "do": ["set_maintain('mote', 'life_support', 'medbay', 'hydroponics', 'comms')"], "goto": "reprogrammed"}
+      ]
+    },
+    "reprogrammed": {
+      "text": "Table updated. This unit will require spare parts. This unit always requires spare parts.",
+      "next": "hub"
+    },
+    "six": {
+      "text": "Units one through six are in the spares bin in Engineering. Unit four is this unit's left manipulator. Unit two is this unit's voice. This unit prefers not to dwell on it.",
+      "next": "hub"
+    },
+    "where": {
+      "text": "Chief Kowal: {activity('bram')}. Technician Anders: {activity('pip')}. Botanist Castellanos: {activity('wren')}. Dr. Suvari: {activity('lin')}. All crew are also listed in your datapad under CREW. This unit recommends reading it.",
+      "next": "hub"
+    }
+  }
+}

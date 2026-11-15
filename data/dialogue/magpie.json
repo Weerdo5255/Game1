@@ -1,0 +1,38 @@
+{
+  "start": [
+    {"if": "flag('dex_left')", "goto": "gone"},
+    {"if": "flag('leaving_with_dex') and present('dex') and npc_in('dex', 'hangar') and time_between(1, 5)", "goto": "board"},
+    {"goto": "look"}
+  ],
+  "nodes": {
+    "look": {
+      "speaker": "narrator",
+      "text": "The <c>Magpie</c>: a short-hop shuttle older than the reactor. Six seats, one of them with the padding still in it. The hull is cold, but somebody has been keeping the engine seals greased.",
+      "choices": [
+        {"text": "Check the cargo hatch.", "goto": "hatch"},
+        {"text": "Leave it.", "goto": "end"}
+      ]
+    },
+    "hatch": {
+      "speaker": "narrator",
+      "variants": [
+        {"if": "container_count('shuttle_hold', 'ration_pack') + container_count('shuttle_hold', 'fuel_cell') + container_count('shuttle_hold', 'spare_parts') > 0",
+         "text": "Through the scratched port of the hatch you can make out crates that have no business being in a mothballed shuttle. Ration boxes. The blue shimmer of a fuel cell."},
+        {"text": "The hatch is locked. Through its scratched port the hold looks empty. For now."}
+      ],
+      "do": ["if container_count('shuttle_hold', 'ration_pack') > 0 and not flag('knows_dex_scheme'): set_flag('saw_magpie_cargo')"]
+    },
+    "gone": {
+      "speaker": "narrator",
+      "text": "Scorch marks on the pad, and a draught where the Magpie used to be."
+    },
+    "board": {
+      "speaker": "dex",
+      "text": "Last call, friend. Seat's still warm for you. Once we're past the ring shadow nobody can call us back.",
+      "choices": [
+        {"text": "Let's go. This station was dead before I got here.", "do": ["emit('magpie_launch')"], "goto": "end"},
+        {"text": "I am not coming, Dex.", "do": ["clear_flag('leaving_with_dex')", "add_rel(-10, 'dex')"], "goto": "end"}
+      ]
+    }
+  }
+}

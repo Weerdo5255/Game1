@@ -1,0 +1,172 @@
+{
+  "start": [
+    {"if": "flag('tunnel_sealed')", "goto": "sealed"},
+    {"if": "flag('signal_decoded') and npc_in('lin', 'excavation') and not flag('artifact_resolved')", "goto": "finale"},
+    {"if": "not flag('met_lin')", "goto": "first"},
+    {"goto": "hub"}
+  ],
+  "nodes": {
+    "first": {
+      "text": [
+        "If you are here about the power allocation, the Administrator approved it. If you are here about anything else, I am in the middle of a run.",
+        "...You are the auditor. Fine. Dr. Suvari. Glaciology, nominally. Ask your questions."
+      ],
+      "do": ["set_flag('met_lin')"],
+      "choices": [
+        {"text": "What is the analysis rig for?", "goto": "what"},
+        {"text": "That waveform on your screen is not thermal noise.", "skill": ["science", 4], "once": true, "goto": "insight"},
+        {"text": "Thirty-four kilowatts is a great deal of glaciology.", "goto": "power"}
+      ]
+    },
+    "what": {
+      "text": "Deep ice acoustics. Stress fractures, melt pockets. It is all in my quarterly reports, which I am sure you have read.",
+      "choices": [
+        {"text": "Your quarterly reports do not mention a chamber.", "if": "flag('seen_artifact') or flag('saw_lab_sample')", "goto": "truth"},
+        {"text": "I see.", "goto": "hub"}
+      ]
+    },
+    "power": {
+      "text": "It is a great deal of glaciology because it is a great deal of ice. If Kowal has been bending your ear: his reactor's problems predate my rig by three decades.",
+      "do": ["add_rel(-3)"],
+      "next": "hub"
+    },
+    "insight": {
+      "text": [
+        "...No. It is not.",
+        "It has structure. Nested periodicity, a preamble, something that behaves very much like a checksum. I have been staring at it for eight months and you are the first person on this station to look at that screen and <y>see</y> it."
+      ],
+      "do": ["add_rel(20)", "add_xp(40)", "set_flag('knows_signal')"],
+      "next": "truth"
+    },
+    "truth": {
+      "text": [
+        "There is a constructed object one kilometre under this station. It was transmitting when Tuck's bore broke through and it has been transmitting to <y>us</y> ever since. The pattern changes when we change.",
+        "I can hear it. I cannot read it. To lock onto the carrier I need a phase-stable reference, and there is exactly one on this moon: the amplifier core from the comms array."
+      ],
+      "do": ["set_flag('knows_signal')", "set_flag('knows_amp')", "if not quest_started('q_signal'): start_quest('q_signal')", "set_stage('q_signal', 'amplifier')"],
+      "choices": [
+        {"text": "And if you could read it?", "goto": "why"},
+        {"text": "Pip needs that core to call for help.", "goto": "pip"},
+        {"text": "This has to go in my report.", "do": ["add_rel(-10)"], "goto": "report"}
+      ]
+    },
+    "why": {
+      "text": "Then we would know what it has been asking. Forty years of ice cores and this is the only thing on Tethys that has ever asked us anything. Can you honestly tell me a supply request matters more?",
+      "next": "hub"
+    },
+    "pip": {
+      "text": "Pip wants to phone home. Home cut our budget, lost our drone and sent an accountant. I mean no offence. What I am doing may be the most important thing any of us will ever touch.",
+      "next": "hub"
+    },
+    "report": {
+      "text": "Then they will come with drills and a fence, and whatever is down there will have spent ten thousand years calling out only to be answered by a mining concern. Write what you like. I would ask you to wait until I can tell you what it says.",
+      "next": "hub"
+    },
+
+    "hub": {
+      "variants": [
+        {"if": "flag('signal_decoded')", "text": "It is done. I have it. Come down to the chamber - I am not saying it up here."},
+        {"if": "npc_has('lin', 'signal_amplifier')", "text": "It is locked on. The carrier is clean. I am {round(min(100, var('signal_progress') / 40 * 100))} percent through the preamble and I have not been this awake in years."},
+        {"if": "flag('lab_demoted') and eff('lab') < 0.3", "text": "My rig is dark. Somebody moved me to the bottom of the queue. I wonder who."},
+        {"if": "flag('lin_paused')", "text": "I am resting. As agreed. I hate it."},
+        {"text": "Yes? I am in the middle of a run."}
+      ],
+      "choices": [
+        {"text": "I brought you the amplifier core.", "item": ["signal_amplifier", 1], "goto": "give_core"},
+        {"text": "What is the rig actually for?", "if": "not flag('knows_signal')", "goto": "what"},
+        {"text": "I moved the lab down the power queue. People need to eat.", "if": "flag('lab_demoted') and not flag('lin_told_lab')", "goto": "demoted"},
+        {"text": "You need to stop, Lin. Sleep. Eat. A day.", "if": "flag('knows_signal') and not flag('lin_paused') and not flag('signal_decoded')", "goto": "pause"},
+        {"text": "I found this in the chamber.", "if": "has_item('artifact_shard') and not flag('lin_saw_shard')", "goto": "shard"},
+        {"text": "What happens when you decode it?", "if": "flag('knows_signal') and not flag('signal_decoded')", "goto": "after"},
+        {"text": "I will let you work.", "goto": "end"}
+      ]
+    },
+    "give_core": {
+      "text": [
+        "You... are giving it to me. Not the radio.",
+        "Thank you. I do not say that. Thank you. Give me power and a few days and I will tell you what has been waiting under our feet since before there were people."
+      ],
+      "do": ["give_to('lin', 'signal_amplifier', 1)", "set_flag('amp_to_lin')", "add_rel(30)", "add_rel(-15, 'pip')", "add_rel(-10, 'bram')", "set_stage('q_signal', 'waiting')", "add_xp(40)"],
+      "next": "end"
+    },
+    "demoted": {
+      "text": "You. Of course. Ten thousand years it has waited and it can wait for the tomatoes, is that it? ...No. Do not answer. I know what the right answer is. I simply hate it.",
+      "do": ["set_flag('lin_told_lab')"],
+      "next": "hub"
+    },
+    "pause": {
+      "text": "I will sleep when it is done.",
+      "choices": [
+        {"text": "It has waited ten thousand years. It will wait one more night.", "check": ["persuasion", 13], "pass": "pause_yes", "fail": "pause_no"},
+        {"text": "As a medic: you are three days from collapse.", "skill": ["medicine", 4], "goto": "pause_yes"},
+        {"text": "Never mind.", "goto": "hub"}
+      ]
+    },
+    "pause_no": {"text": "That is exactly what somebody would say who had not heard it. No.", "do": ["add_rel(-4)"], "next": "hub"},
+    "pause_yes": {
+      "text": "...One day. I will give you one day, and you will tell Pell I came willingly. If I miss something because I was asleep, I will never forgive either of us.",
+      "do": ["set_flag('lin_paused')", "set_schedule('lin', 'resting')", "add_rel(5)", "add_rel(8, 'pell')", "add_xp(30)", "set_var('lin_resume', time() + 1440)"],
+      "next": "end"
+    },
+    "shard": {
+      "text": "From the chamber floor? It sheds. I had not thought - give me that. No. Keep it. Keep it with you and tell me if you dream. I need a control subject who is not me or Tuck.",
+      "do": ["set_flag('lin_saw_shard')", "add_rel(8)", "add_xp(20)"],
+      "next": "hub"
+    },
+    "after": {
+      "text": "Then somebody answers. I would rather it were someone who has listened first than a Combine retrieval team with a cutting torch. That is the whole of my plan. I am aware of how thin it is.",
+      "next": "hub"
+    },
+
+    "decoded": {
+      "text": [
+        "I have it. All of it. It is not a message. It is a question, and it has been asking the same one the whole time.",
+        "I am going down to the chamber. Come with me. I do not want to be the only person who knows what it asks, and I do not think I should be the one to answer alone."
+      ],
+      "do": ["set_stage('q_signal', 'decoded')"],
+      "next": "end"
+    },
+    "finale": {
+      "text": [
+        "You came. Good.",
+        "It asks: <p>IS ANYONE THERE.</p> That is all. Ten thousand years of it. A lighthouse, left by someone who wanted to know if the dark would ever grow anything that could say yes.",
+        "I can answer. One pulse on the carrier, through the core. After that I do not know what happens. Nobody does. Tell me what you think we should do."
+      ],
+      "choices": [
+        {"text": "Answer it. Somebody should say yes.", "goto": "answer"},
+        {"text": "Not us, not like this. Seal the chamber and tell no one.", "if": "present('tuck')", "goto": "seal"},
+        {"text": "Wait for the tug. This is bigger than ten people.", "check": ["persuasion", 14], "pass": "wait_yes", "fail": "wait_no"},
+        {"text": "Step away from it, Doctor. Now.", "check": ["intimidation", 15], "pass": "wait_yes", "fail": "wait_no"}
+      ]
+    },
+    "answer": {
+      "speaker": "narrator",
+      "text": [
+        "Lin puts her hand flat against the spire. The scored lines flare white, then violet, then a colour you do not have a name for.",
+        "For one long breath every lamp on Ithaca Station burns twice as bright."
+      ],
+      "do": ["set_flag('artifact_resolved')", "set_flag('artifact_answered')", "complete_quest('q_signal')", "end_game('contact')"]
+    },
+    "seal": {
+      "text": "Bury it. ...Tuck would do it in a heartbeat. He has been begging for the charges for a month. If he has them, I cannot stop him, and I think you know that.",
+      "do": ["set_flag('player_backs_seal')", "set_flag('tuck_wants_charges')", "add_rel(-25)", "add_rel(20, 'tuck')"],
+      "next": "end"
+    },
+    "wait_yes": {
+      "text": "...Yes. All right. I have waited eight months; I can wait for a ship. But I am telling you now: whoever comes off that tug will not ask it anything. They will just take it.",
+      "do": ["set_flag('artifact_resolved')", "set_flag('artifact_waiting')", "complete_quest('q_signal')", "cancel_goal('lin', 'wait_in_chamber')"],
+      "next": "end"
+    },
+    "wait_no": {
+      "text": "No. I am sorry. I have listened to it for eight months and you have known about it for days. I am going to answer.",
+      "next": "answer"
+    },
+    "sealed": {
+      "variants": [
+        {"if": "flag('tuck_charges')", "text": "You gave him the charges. You. I showed you the most important thing our species has ever found and you helped a frightened man bury it. Get out of my lab."},
+        {"text": "It is gone. A thousand tonnes of ice between me and the only question that ever mattered. Leave me alone. Please."}
+      ],
+      "next": "end"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "start": "menu",
+  "nodes": {
+    "menu": {
+      "speaker": "narrator",
+      "text": "ITHACA STATION PUBLIC INFORMATION. Day {day()}, {clock()}.",
+      "choices": [
+        {"text": "Station directory", "goto": "directory"},
+        {"text": "How the power queue works", "goto": "power"},
+        {"text": "Rations, water and air", "goto": "supplies"},
+        {"text": "Visiting vessels", "goto": "tug"},
+        {"text": "Log off", "goto": "end"}
+      ]
+    },
+    "directory": {
+      "speaker": "narrator",
+      "text": [
+        "CENTRAL RING: mess hall and galley dispenser; life support in the south-west corner.",
+        "NORTH: Command Deck. WEST: Hydroponics (upper door), Engineering (lower door). EAST: Medical & Research (upper), Crew Quarters (lower). SOUTH: Hangar Bay, stores and the excavation lift."
+      ],
+      "next": "menu"
+    },
+    "power": {
+      "speaker": "narrator",
+      "text": [
+        "The reactor and the auxiliary RTG feed one bus. When demand exceeds supply, systems are served strictly in queue order and the rest brown out.",
+        "Queue positions can be changed at each system's own console by authorised crew. Current supply: {round(power_supply())} kW. Current demand: {round(power_demand())} kW."
+      ],
+      "next": "menu"
+    },
+    "supplies": {
+      "speaker": "narrator",
+      "text": [
+        "Hydroponics delivers ration packs to the galley dispenser. The quartermaster tops the dispenser up from stores when it runs low.",
+        "Water in tank: {round(res('water'))} L. Air quality: {round(res('air'))}%. Each crew member uses about 29 L of water a day. Please shower accordingly."
+      ],
+      "next": "menu"
+    },
+    "tug": {
+      "speaker": "narrator",
+      "text": "MCS Calypso's Thread, Combine fleet tug. Departed Day 1. Scheduled return: Day 6, 08:00 ({max(0, round(hours_until(6, 8)))} hours). Supply drone ISD-44: 94 days overdue. No further traffic expected.",
+      "next": "menu"
+    }
+  }
+}
