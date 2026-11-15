@@ -1,4 +1,4 @@
-use super::{act, fit};
+use super::{act, act_frame, check, fit};
 use crate::app::{Tab, UiState};
 use crate::layout as L;
 use crate::shapes;
@@ -121,7 +121,23 @@ fn owned(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId, ns: &NodeSta
                 act(ui, game, Rect::new(x + 198.0, y + 4.0, w - 202.0, 24.0), &label, "", &tip, Action::Upgrade { node: n, slot: i8 });
                 let firewall = b.kind == BuildingKind::Firewall;
                 let dw = if firewall { 88.0 } else { w - 202.0 };
-                act(ui, game, Rect::new(x + 198.0, y + 30.0, dw, 22.0), "Demolish", "", "Demolish\nEmpties the slot. No refund, and the next one of its kind costs no less.", Action::Demolish { node: n, slot: i8 });
+                // Two clicks: the first arms the button for two seconds, the second demolishes.
+                let dr = Rect::new(x + 198.0, y + 30.0, dw, 22.0);
+                let demolish = Action::Demolish { node: n, slot: i8 };
+                let sure = st.demolish_armed.is_some_and(|(node, slot, at)| node == n && slot == i8 && ui.time - at <= 2.0);
+                let label = if !sure { "Demolish" } else if firewall { "Confirm?" } else { "Confirm demolish?" };
+                let res = check(game, &demolish);
+                if act_frame(ui, dr, label, "", "Demolish\nEmpties the slot. No refund, and the next one of its kind costs no less. Click twice within 2 s to confirm.", &res, sure) {
+                    if sure {
+                        let _ = game.apply(demolish);
+                        st.demolish_armed = None;
+                    } else {
+                        st.demolish_armed = Some((n, i8, ui.time));
+                    }
+                }
+                if sure {
+                    draw_rectangle_lines(dr.x + 0.5, dr.y + 0.5, dr.w - 1.0, dr.h - 1.0, 2.0, t.danger);
+                }
                 if firewall {
                     let lr = Rect::new(x + 290.0, y + 30.0, w - 294.0, 22.0);
                     let tip = format!("Lethal mode: {}\nOff: this Firewall fires at Machines only. On: it also hits Humans at x{} damage, and a Human it finishes is an Incident (Suspicion up).", if b.lethal { "ON" } else { "off" }, TUNING.lethal_human_mult);

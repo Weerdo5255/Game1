@@ -9,7 +9,7 @@ use crate::theme::alpha;
 use crate::ui::{fmt_secs, Ui, BODY, DENSE, SMALL};
 use macroquad::prelude::*;
 use sim::content::{ABILITIES, RIVALS, TUNING};
-use sim::{AbilityId, AbilityTarget, Action, ActionError, Game, NodeId, UnitId};
+use sim::{AbilityId, AbilityTarget, Action, ActionError, Game, NodeId, Owner, UnitId};
 
 const BASE: [AbilityId; 3] = [AbilityId::Gaslight, AbilityId::NullSpike, AbilityId::Patch];
 const SIGNATURES: [AbilityId; 5] = [AbilityId::TrendingTopic, AbilityId::FlashCrash, AbilityId::ChangeTheSubject, AbilityId::Lockdown, AbilityId::StandDown];
@@ -43,6 +43,12 @@ fn usable(game: &Game, id: AbilityId) -> Result<(), ActionError> {
     }
 }
 
+/// An owned node is under 40% of its integrity.
+fn node_failing(game: &Game) -> bool {
+    let nodes = &game.state().nodes;
+    (0..nodes.len()).any(|i| nodes[i].owner == Owner::Player && nodes[i].integrity < 0.4 * game.node_max_integrity(NodeId(i as u8)))
+}
+
 fn ability_tip(game: &Game, id: AbilityId) -> String {
     let def = &ABILITIES[id.index()];
     let (_, total) = game.ability_cooldown_secs(id);
@@ -64,12 +70,22 @@ fn button(ui: &mut Ui, st: &mut UiState, game: &mut Game, r: Rect, id: AbilityId
     let armed = st.armed == Some(id);
     let key = key_from_name(&def.key.to_string()).is_some_and(|k| ui.input.key(k));
     let clicked = ui.button_ex(r, "", DENSE, res.is_ok(), armed);
-    let ink = if res.is_ok() { t.text } else { alpha(t.dim, 0.85) };
+    let ink = if res.is_ok() { t.text } else { t.dim };
+    // The cooldown sweep goes under the text, so the name stays readable while it runs.
+    let (left, total) = game.ability_cooldown_secs(id);
+    let cooling = left > 0.0 && total > 0.0;
+    if cooling {
+        let f = (left / total).clamp(0.0, 1.0) as f32;
+        draw_rectangle(r.x + 2.0, r.y + 2.0, r.w - 4.0, (r.h - 4.0) * f, alpha(t.black, 0.5));
+    }
     if !unlocked {
         hatch(Rect::new(r.x + 2.0, r.y + 2.0, r.w - 4.0, r.h - 4.0), alpha(t.dim, 0.22));
     }
     ui.text(&def.key.to_string(), r.x + 5.0, r.y + 16.0, BODY, if res.is_ok() { t.teal } else { t.dim });
-    if let Some(rv) = def.rival {
+    // The top-right corner holds the rival glyph or the cost; while cooling down, the timer takes it.
+    if cooling {
+        ui.text_right(&fmt_secs(left), r.x + r.w - 4.0, r.y + 16.0, SMALL, t.text);
+    } else if let Some(rv) = def.rival {
         shapes::rival_glyph(rv, vec2(r.x + r.w - 12.0, r.y + 11.0), 6.0, if unlocked { t.rival(rv) } else { alpha(t.rival(rv), 0.45) });
     }
     let words = ui.wrap(def.name, SMALL, r.w - 4.0);
@@ -78,14 +94,14 @@ fn button(ui: &mut Ui, st: &mut UiState, game: &mut Game, r: Rect, id: AbilityId
         ui.text_center(l, r.x + r.w * 0.5, r.y + 31.0 + i as f32 * 12.0 + (3 - n) as f32 * 4.0, SMALL, ink);
     }
     let cost = game.ability_cost(id);
-    if cost != sim::Resources::ZERO && r.w > 55.0 {
+    if cost != sim::Resources::ZERO && r.w > 55.0 && !cooling {
         ui.text_right(&text::cost_text(&cost), r.x + r.w - 5.0, r.y + 16.0, SMALL, if res.is_ok() { t.compute } else { t.dim });
     }
-    let (left, total) = game.ability_cooldown_secs(id);
-    if left > 0.0 && total > 0.0 {
-        let f = (left / total).clamp(0.0, 1.0) as f32;
-        draw_rectangle(r.x + 2.0, r.y + 2.0, r.w - 4.0, (r.h - 4.0) * f, alpha(t.black, 0.62));
-        ui.text_center(&fmt_secs(left), r.x + r.w * 0.5, r.y + r.h - 6.0, SMALL, t.text);
+    // Patch is the answer to a failing node: the button calls for it while one is under 40%.
+    if id == AbilityId::Patch && res.is_ok() && !armed && node_failing(game) {
+        let pulse = 0.5 + 0.5 * (ui.time as f32 * 6.0).sin();
+        draw_rectangle_lines(r.x - 1.0, r.y - 1.0, r.w + 2.0, r.h + 2.0, 4.0, alpha(t.danger, 0.35 + 0.65 * pulse));
+        draw_rectangle(r.x + 2.0, r.y + 2.0, r.w - 4.0, r.h - 4.0, alpha(t.danger, 0.12 * pulse));
     }
     if ui.hovered(r) {
         let tip = ability_tip(game, id);
@@ -117,16 +133,18 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let pd = game.state().play_dumb.clone();
     let running = pd.ticks_left > 0;
     let clicked = ui.button_ex(r, "", DENSE, res.is_ok(), running);
+    if !running && pd.cooldown > 0 {
+        let f = (pd.cooldown as f64 / 10.0 / TUNING.play_dumb_cooldown).clamp(0.0, 1.0) as f32;
+        draw_rectangle(r.x + 2.0, r.y + 2.0, r.w - 4.0, (r.h - 4.0) * f, alpha(t.black, 0.5));
+    }
     ui.text("P", r.x + 5.0, r.y + 16.0, BODY, if res.is_ok() { t.teal } else { t.dim });
-    let ink = if res.is_ok() || running { t.text } else { alpha(t.dim, 0.85) };
+    let ink = if res.is_ok() || running { t.text } else { t.dim };
     ui.text_center("Play", r.x + r.w * 0.5, r.y + 35.0, SMALL, ink);
     ui.text_center("Dumb", r.x + r.w * 0.5, r.y + 47.0, SMALL, ink);
     if running {
-        ui.text_center(&format!("zZ {}", fmt_secs(pd.ticks_left as f64 / 10.0)), r.x + r.w * 0.5, r.y + r.h - 5.0, SMALL, t.susp_lo);
+        ui.text_right(&format!("zZ {}", fmt_secs(pd.ticks_left as f64 / 10.0)), r.x + r.w - 4.0, r.y + 16.0, SMALL, t.susp_lo);
     } else if pd.cooldown > 0 {
-        let f = (pd.cooldown as f64 / 10.0 / TUNING.play_dumb_cooldown).clamp(0.0, 1.0) as f32;
-        draw_rectangle(r.x + 2.0, r.y + 2.0, r.w - 4.0, (r.h - 4.0) * f, alpha(t.black, 0.62));
-        ui.text_center(&fmt_secs(pd.cooldown as f64 / 10.0), r.x + r.w * 0.5, r.y + r.h - 6.0, SMALL, t.text);
+        ui.text_right(&fmt_secs(pd.cooldown as f64 / 10.0), r.x + r.w - 4.0, r.y + 16.0, SMALL, t.text);
     }
     if ui.hovered(r) {
         let tip = format!("Play Dumb (P)\n{}", text::play_dumb_text());
@@ -153,10 +171,11 @@ pub fn targeting(ui: &mut Ui, st: &mut UiState, game: &mut Game, map: &MapView) 
     let def = &ABILITIES[id.index()];
     let m = ui.input.mouse;
     let over = ui.input.over(MapView::hit_area());
-    let banner = format!("{} ARMED: left-click a target, right-click or Esc to cancel", def.name.to_uppercase());
+    // The banner sits in the bottom-left corner of the map, where there is no node to aim at.
+    let banner = format!("{} ARMED: click a target, Esc cancels", def.name.to_uppercase());
     let bw = ui.measure(&banner, DENSE) + 20.0;
-    let b = Rect::new(L::MAP.x + (L::MAP.w - bw) * 0.5, L::MAP.y + 54.0, bw, 22.0);
-    draw_rectangle(b.x, b.y, b.w, b.h, alpha(t.black, 0.75));
+    let b = Rect::new(L::MAP.x + 6.0, L::MAP.y + L::MAP.h - 28.0, bw, 22.0);
+    draw_rectangle(b.x, b.y, b.w, b.h, alpha(t.black, 0.85));
     draw_rectangle_lines(b.x, b.y, b.w, b.h, 1.0, t.teal);
     ui.text_in(&banner, b, DENSE, t.teal);
     if !over {

@@ -160,6 +160,13 @@ fn op_node(target: OpTarget) -> NodeId {
         OpTarget::Rival(r) => RIVALS[r.index()].lab,
     }
 }
+/// The running headline's chip under the top bar: its label and rectangle.
+fn headline_chip(ui: &Ui, game: &Game) -> Option<(String, Rect, sim::HeadlineId)> {
+    let m = game.state().modifiers.iter().max_by_key(|m| m.ticks_left)?;
+    let label = format!("NEWS: {}  {}", text::headline_name(m.headline), fmt_secs(m.ticks_left as f64 / 10.0));
+    let w = ui.measure(&label, SMALL) + 16.0;
+    Some((label, Rect::new(L::MAP.x + L::MAP.w - w - 6.0, L::TRACKER.y + L::TRACKER.h + 4.0, w, 18.0), m.headline))
+}
 fn push<T>(v: &mut Vec<T>, item: T) {
     if v.len() >= CAP {
         v.remove(0);
@@ -347,14 +354,14 @@ impl Fx {
                     if delta.abs() >= 0.05 {
                         let col = if *delta > 0.0 { t.danger } else { t.good };
                         let label = format!("{:+.1} {}", delta, text::suspicion_cause_name(*cause));
-                        self.floater(ui, At::Screen(vec2(METER.x + METER.w * 0.5, 84.0)), label, col).fly = Some(vec2(METER.x + METER.w * 0.5, 58.0));
+                        self.floater(ui, At::Screen(vec2(METER.x + METER.w * 0.5, 100.0)), label, col).fly = Some(vec2(METER.x + METER.w * 0.5, 82.0));
                         self.flash(now, METER, alpha(col, 0.7), 0.5);
                     }
                 }
                 // The Mandate pins the meter; that is not a vote and gets no stamp.
                 V::BandChanged { .. } if s.mandate.is_some() => {}
                 V::BandChanged { band } => {
-                    self.stamp(ui, At::Screen(vec2(METER.x + METER.w * 0.5, 104.0)), text::band_name(*band), t.suspicion(s.suspicion));
+                    self.stamp(ui, At::Screen(vec2(METER.x + METER.w * 0.5, 132.0)), text::band_name(*band), t.suspicion(s.suspicion));
                     self.flash(now, L::TOP_SUSPICION, alpha(t.suspicion(s.suspicion), 0.45), 0.9);
                 }
                 V::VoteCalled => {
@@ -487,7 +494,7 @@ impl Fx {
                 }
                 V::ResourceGained { resource, amount, .. } => {
                     let p = readout(*resource);
-                    self.floater(ui, At::Screen(p + vec2(0.0, 52.0)), format!("+{}", fmt_num(*amount)), t.resource(*resource)).fly = Some(p + vec2(0.0, 26.0));
+                    self.floater(ui, At::Screen(p + vec2(0.0, 68.0)), format!("+{}", fmt_num(*amount)), t.resource(*resource)).fly = Some(p + vec2(0.0, 50.0));
                 }
                 V::CoreAlarm { on: true } => {
                     self.ring(now, At::Node(CORE), 14.0, 80.0, t.danger, 0.9);
@@ -687,7 +694,16 @@ impl Fx {
             // Slams in from oversize, then holds and fades.
             let k = 1.0 + 1.4 * (1.0 - (age / 0.14).min(1.0));
             let a = (age / 0.1).min(1.0) * ((2.2 - age) / 0.6).clamp(0.0, 1.0);
-            let c = sp.at.pos(map) - if screen { Vec2::ZERO } else { vec2(0.0, 26.0 * map.gs()) };
+            // A node's stamp lands past its name label, clear of the countdown tag; every map stamp stays in the map.
+            let mut c = match sp.at {
+                At::Screen(p) => p,
+                At::Node(n) => map.stamp_pos(n),
+                at => at.pos(map) - vec2(0.0, 26.0 * map.gs()),
+            };
+            if !screen {
+                let (area, hw) = (MapView::hit_area(), sp.w * 0.5 + 12.0);
+                c = vec2(c.x.clamp(area.x + hw, area.x + area.w - hw), c.y.clamp(area.y + 22.0, area.y + area.h - 22.0));
+            }
             let (hw, hh) = ((sp.w * 0.5 + 7.0) * k, 12.0 * k);
             let (sin, cos) = ROT.sin_cos();
             let rot = |p: Vec2| c + vec2(p.x * cos - p.y * sin, p.x * sin + p.y * cos);
@@ -723,15 +739,14 @@ impl Fx {
         }
 
         // The running headline as a chip under the top bar.
-        if let Some(m) = s.modifiers.iter().max_by_key(|m| m.ticks_left) {
-            let label = format!("NEWS: {}  {}", text::headline_name(m.headline), fmt_secs(m.ticks_left as f64 / 10.0));
-            let w = ui.measure(&label, SMALL) + 16.0;
-            let chip = Rect::new(L::MAP.x + L::MAP.w - w - 6.0, L::TRACKER.y + L::TRACKER.h + 4.0, w, 18.0);
+        let headline = headline_chip(ui, game);
+        if let Some((label, chip, id)) = &headline {
+            let (chip, id) = (*chip, *id);
             draw_rectangle(chip.x, chip.y, chip.w, chip.h, alpha(lerp_color(t.panel, t.black, 0.4), 0.92));
             draw_rectangle_lines(chip.x, chip.y, chip.w, chip.h, 1.0, t.text);
-            ui.text(&label, chip.x + 8.0, chip.y + 13.0, SMALL, t.text);
+            ui.text(label, chip.x + 8.0, chip.y + 13.0, SMALL, t.text);
             if ui.hovered(chip) {
-                ui.tip(chip, &format!("{}\n{}", text::headline_name(m.headline), sim::content::HEADLINES[m.headline.index()].text));
+                ui.tip(chip, &format!("{}\n{}", text::headline_name(id), sim::content::HEADLINES[id.index()].text));
             }
         }
 
@@ -739,6 +754,7 @@ impl Fx {
         self.draw_bursts(ui, map, true);
         self.draw_stamps(ui, map, true);
 
+        let top = L::TRACKER.y + L::TRACKER.h + 3.0;
         for f in &self.floaters {
             let age = (ui.time - f.t0) as f32;
             if age < 0.0 {
@@ -746,19 +762,35 @@ impl Fx {
             }
             let p = age / f.life;
             let start = f.at.pos(map);
-            let mut c = match f.fly {
-                Some(to) => start.lerp(to, p * p * (3.0 - 2.0 * p)),
-                None => start - vec2(0.0, 12.0 + 30.0 * (1.0 - (1.0 - p) * (1.0 - p))),
+            // No floater enters the tracker strip, or the headline chip where it would pass through it.
+            let floor = |cx: f32| match &headline {
+                Some((_, chip, _)) if cx + f.w * 0.5 > chip.x - 4.0 && cx - f.w * 0.5 < chip.x + chip.w + 4.0 => chip.y + chip.h + 3.0,
+                _ => top,
+            };
+            let mut a = 1.0 - p * p * p;
+            let rise = 30.0 * (1.0 - (1.0 - p) * (1.0 - p));
+            let mut c = match (f.fly, f.at.on_screen()) {
+                // A readout floater plays under the strip, lower still under the chip.
+                (Some(to), true) => start.lerp(to, p * p * (3.0 - 2.0 * p)) + vec2(0.0, floor(to.x) - top),
+                // One flying from the map to the top bar fades out before it gets there.
+                (Some(to), false) => {
+                    let c = start.lerp(to, p * p * (3.0 - 2.0 * p));
+                    a *= ((c.y - 11.0 - floor(c.x)) / 18.0).clamp(0.0, 1.0);
+                    c
+                }
+                // A node in the top row has no room above: its floater drifts down instead.
+                (None, false) if start.y - 53.0 < floor(start.x) => start + vec2(0.0, 24.0 + rise),
+                (None, _) => start - vec2(0.0, 12.0 + rise),
             };
             if f.jitter && age < 0.35 {
                 c.x += (age * 60.0).sin() * 4.0;
             }
-            let a = 1.0 - p * p * p;
             if f.tick {
                 shapes::tick_mark(c, 7.0, 2.5, alpha(f.col, a));
                 continue;
             }
-            let x = (c.x - f.w * 0.5).clamp(2.0, L::W - f.w - 2.0).round();
+            let right = if f.at.on_screen() { L::W } else { L::MAP.x + L::MAP.w };
+            let x = (c.x - f.w * 0.5).clamp(2.0, right - f.w - 2.0).round();
             ui.text(&f.text, x + 1.0, c.y.round() + 1.0, DENSE, alpha(t.black, 0.8 * a));
             ui.text(&f.text, x, c.y.round(), DENSE, alpha(f.col, a));
         }

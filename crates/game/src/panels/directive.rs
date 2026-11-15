@@ -2,7 +2,7 @@ use super::act;
 use crate::app::UiState;
 use crate::layout as L;
 use crate::text;
-use crate::theme::lerp_color;
+use crate::theme::{alpha, lerp_color};
 use crate::ui::{fmt_num, fmt_secs, Ui, DENSE, SMALL};
 use macroquad::prelude::*;
 use sim::content::{OPS, TECHS, TUNING};
@@ -19,13 +19,24 @@ pub fn draw(ui: &mut Ui, _st: &mut UiState, game: &mut Game) {
         None => "DIRECTIVE: The Mandate".to_owned(),
     };
     ui.text(&header, x, r.y + 17.0, DENSE, t.gold);
-    for (i, line) in game.directive().iter().enumerate() {
-        let y = r.y + 24.0 + i as f32 * 18.0;
+    let mut next_y = r.y + 24.0;
+    for line in game.directive().iter() {
+        let y = next_y;
+        next_y += 18.0;
         let row = Rect::new(x, y, w, 17.0);
         if line.id == DirectiveId::StartMandate && !line.done {
+            // The one control that ends the game is a full button, lit in gold once it can be pressed.
+            let button = Rect::new(x, y + 1.0, w, 28.0);
+            next_y = y + 32.0;
             let cost = game.mandate_cost();
             let tip = format!("Start the Mandate\n{}\nCost {}. Suspicion is pinned at 100 and the Uprising comes for the Core.", text::directive_tip(line.id), text::cost_long(&cost));
-            act(ui, game, row, "Start the Mandate", "", &tip, Action::StartMandate);
+            let ready = game.can_apply(&Action::StartMandate).is_ok();
+            act(ui, game, button, "START THE MANDATE", "", &tip, Action::StartMandate);
+            let pulse = if ready { 0.6 + 0.4 * (ui.time as f32 * 4.0).sin() } else { 0.45 };
+            draw_rectangle_lines(button.x + 0.5, button.y + 0.5, button.w - 1.0, button.h - 1.0, if ready { 3.0 } else { 2.0 }, alpha(t.gold, pulse));
+            if ready {
+                draw_rectangle(button.x + 2.0, button.y + 2.0, button.w - 4.0, button.h - 4.0, alpha(t.gold, 0.14 * pulse));
+            }
             continue;
         }
         let bx = Rect::new(x, y + 3.0, 11.0, 11.0);
@@ -79,8 +90,11 @@ pub fn draw(ui: &mut Ui, _st: &mut UiState, game: &mut Game) {
         let total = (TUNING.play_dumb_secs * 10.0) as u32;
         bars.push(("Playing dumb".to_owned(), frac(s.play_dumb.ticks_left, total), t.susp_lo, secs(s.play_dumb.ticks_left)));
     }
-    for (i, (label, f, col, left)) in bars.iter().take(5).enumerate() {
-        let b = Rect::new(x, r.y + 79.0 + i as f32 * 16.0, w, 14.0);
+    // The bars start under the last directive line and stop at the panel's edge.
+    let bars_y = (next_y + 1.0).max(r.y + 79.0);
+    let room = ((r.y + r.h - 1.0 - bars_y) / 16.0) as usize;
+    for (i, (label, f, col, left)) in bars.iter().take(room.min(5)).enumerate() {
+        let b = Rect::new(x, bars_y + i as f32 * 16.0, w, 14.0);
         ui.bar(b, *f, lerp_color(*col, t.panel, 0.55));
         let room = b.w - 10.0 - ui.measure(left, SMALL) - 6.0;
         ui.text(&super::fit(ui, label, SMALL, room), b.x + 4.0, b.y + 11.0, SMALL, if left.is_empty() { t.dim } else { t.text });

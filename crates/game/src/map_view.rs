@@ -92,13 +92,45 @@ impl MapView {
         let d = &NODES[n.index()];
         self.to_screen(d.x, d.y)
     }
+    /// How far the Stage 1 close-up's hazard frame reaches into the map view.
+    fn frame_inset(&self) -> f32 {
+        if self.zoom > 1.02 {
+            9.0
+        } else {
+            0.0
+        }
+    }
+    /// In the Stage 1 close-up a node whose glyph would be cut by the frame is not shown at all.
+    pub fn node_visible(&self, n: NodeId) -> bool {
+        let inset = self.frame_inset();
+        if inset == 0.0 {
+            return true;
+        }
+        let (c, area, pad) = (self.node_pos(n), MapView::hit_area(), 16.0 * self.gs() + inset);
+        c.x - pad >= area.x && c.x + pad <= area.x + area.w && c.y - pad >= area.y && c.y + pad <= area.y + area.h
+    }
+    /// Distance from a node's centre to the near edge of its name label.
+    fn label_off(&self, kind: NodeKind) -> f32 {
+        let k = if on_platform(kind) { 23.0 } else if kind == NodeKind::Core { 17.0 } else { 15.0 };
+        k * self.gs()
+    }
+    /// Centre for a stamp about a node: past its name label, on the side away from its sortie countdown.
+    pub fn stamp_pos(&self, n: NodeId) -> Vec2 {
+        let c = self.node_pos(n);
+        let off = self.label_off(NODES[n.index()].kind);
+        if self.label_above(n) {
+            c - vec2(0.0, off + 38.0)
+        } else {
+            c + vec2(0.0, off + 39.0)
+        }
+    }
     /// The part of the map rectangle not covered by the tracker strip.
     pub fn hit_area() -> Rect {
         Rect::new(L::MAP.x, L::TRACKER.y + L::TRACKER.h, L::MAP.w, L::MAP.h - L::TRACKER.h)
     }
     pub fn node_at(&self, p: Vec2) -> Option<NodeId> {
         let reach = 17.0 * self.gs();
-        NODES.iter().map(|d| (d.id, self.node_pos(d.id).distance(p))).filter(|&(_, d)| d <= reach).min_by(|a, b| a.1.total_cmp(&b.1)).map(|(id, _)| id)
+        NODES.iter().filter(|d| self.node_visible(d.id)).map(|d| (d.id, self.node_pos(d.id).distance(p))).filter(|&(_, d)| d <= reach).min_by(|a, b| a.1.total_cmp(&b.1)).map(|(id, _)| id)
     }
     /// Where a unit is drawn this frame (interpolated, offset sideways on its link, orbiting when sieging).
     pub fn unit_pos(&self, u: &Unit, lerp: f32, time: f64) -> Vec2 {
@@ -146,19 +178,19 @@ impl MapView {
                 y += 43.0;
             }
         }
+        self.regions(ui, st, game);
         if t.trim > 0.0 {
-            // Stage 6: a slow rotating halo behind the whole map.
+            // Stage 6: a slow rotating halo over the land and under everything else.
             let c = self.to_screen(FULL_VIEW.1.x as f64, FULL_VIEW.1.y as f64);
             let rot = ui.time as f32 * 0.12;
-            draw_circle(c.x, c.y, 250.0, alpha(t.gold, 0.035 * t.trim));
-            dashed_circle(c, 250.0, 36, rot, 2.0, alpha(t.gold, 0.3 * t.trim));
-            dashed_circle(c, 268.0, 12, -rot * 0.7, 3.0, alpha(t.gold, 0.2 * t.trim));
+            draw_circle(c.x, c.y, 250.0, alpha(t.gold, 0.045 * t.trim));
+            dashed_circle(c, 250.0, 36, rot, 2.0, alpha(t.gold, 0.5 * t.trim));
+            dashed_circle(c, 268.0, 12, -rot * 0.7, 3.0, alpha(t.gold, 0.36 * t.trim));
             for i in 0..12 {
                 let d = dir(rot + i as f32 * TAU / 12.0);
-                draw_line(c.x + d.x * 276.0, c.y + d.y * 276.0, c.x + d.x * 300.0, c.y + d.y * 300.0, 2.0, alpha(t.gold, 0.22 * t.trim));
+                draw_line(c.x + d.x * 276.0, c.y + d.y * 276.0, c.x + d.x * 300.0, c.y + d.y * 300.0, 2.0, alpha(t.gold, 0.4 * t.trim));
             }
         }
-        self.regions(ui, st, game);
         if t.stage >= Stage::Hegemon {
             let c = self.node_pos(CORE);
             let pulse = 1.0 + 0.06 * (ui.time as f32 * 0.8).sin();
@@ -173,6 +205,7 @@ impl MapView {
         self.units(ui, st, game);
         self.overlays(ui, st, game);
         self.labels(ui, game);
+        self.sortie_tags(ui, game);
         if st.leak_blend < 1.0 {
             self.sandbox_frame(ui, 1.0 - st.leak_blend);
         }
@@ -268,6 +301,9 @@ impl MapView {
         let time = ui.time as f32;
         for def in NODES.iter() {
             let id = def.id;
+            if !self.node_visible(id) {
+                continue;
+            }
             let ns = &s.nodes[id.index()];
             let c = self.node_pos(id);
             let style = node_style(&t, game, id);
@@ -356,7 +392,6 @@ impl MapView {
         let t = ui.theme;
         let gs = self.gs();
         let time = ui.time as f32;
-        let mut labelled: Vec<NodeId> = Vec::new();
         for ps in &game.state().pending_sorties {
             let col = t.source(ps.source);
             let c = self.node_pos(ps.origin);
@@ -376,15 +411,38 @@ impl MapView {
                 dashed_line(a, b, 8.0, 7.0, time * 26.0 - run, 2.5, alpha(col, 0.9));
                 run += a.distance(b);
             }
-            if ps.ticks_left > 0 && !labelled.contains(&ps.origin) {
-                labelled.push(ps.origin);
-                let label = fmt_secs(ps.ticks_left as f64 / 10.0);
-                let w = ui.measure(&label, HEADER);
-                let y = if self.label_above(ps.origin) { c.y + 46.0 * gs } else { c.y - 30.0 * gs };
-                draw_rectangle(c.x - w * 0.5 - 4.0, y - 16.0, w + 8.0, 21.0, alpha(t.bg, 0.85));
-                draw_rectangle_lines(c.x - w * 0.5 - 4.0, y - 16.0, w + 8.0, 21.0, 1.0, col);
-                ui.text_center(&label, c.x, y, HEADER, col);
+        }
+    }
+
+    /// The countdown tag of each telegraphed sortie, drawn over units and labels: above its node, or
+    /// below when the name is above, or beside it when the tracker strip leaves no room above.
+    fn sortie_tags(&self, ui: &Ui, game: &Game) {
+        let t = ui.theme;
+        let gs = self.gs();
+        let area = MapView::hit_area();
+        let mut labelled: Vec<NodeId> = Vec::new();
+        for ps in &game.state().pending_sorties {
+            if ps.ticks_left == 0 || labelled.contains(&ps.origin) || !self.node_visible(ps.origin) {
+                continue;
             }
+            labelled.push(ps.origin);
+            let col = t.source(ps.source);
+            let c = self.node_pos(ps.origin);
+            let label = fmt_secs(ps.ticks_left as f64 / 10.0);
+            let w = ui.measure(&label, HEADER);
+            let half = w * 0.5 + 4.0;
+            let (mut x, y) = if self.label_above(ps.origin) {
+                (c.x, c.y + 46.0 * gs)
+            } else if c.y - 30.0 * gs - 16.0 < area.y + 2.0 {
+                let side = 26.0 * gs + half + 2.0;
+                (if c.x + side + half > area.x + area.w { c.x - side } else { c.x + side }, c.y + 6.0)
+            } else {
+                (c.x, c.y - 30.0 * gs)
+            };
+            x = x.clamp(area.x + half + 2.0, area.x + area.w - half - 2.0).round();
+            draw_rectangle(x - half, y - 16.0, half * 2.0, 21.0, alpha(t.bg, 0.85));
+            draw_rectangle_lines(x - half, y - 16.0, half * 2.0, 21.0, 1.0, col);
+            ui.text_center(&label, x, y, HEADER, col);
         }
     }
 
@@ -548,22 +606,32 @@ impl MapView {
 
     fn labels(&self, ui: &Ui, game: &Game) {
         let t = ui.theme;
-        let gs = self.gs();
         let area = MapView::hit_area();
         for def in NODES.iter() {
             let c = self.node_pos(def.id);
             let style = node_style(&t, game, def.id);
-            let off = if on_platform(def.kind) { 23.0 } else if def.kind == NodeKind::Core { 17.0 } else { 15.0 } * gs;
+            let off = self.label_off(def.kind);
             let w = ui.measure(def.name, DENSE);
+            let edge = 4.0 + self.frame_inset();
             // Station Antipode sits in the bottom margin under Baobab Exchange's label: its label goes beside it.
             let beside = def.id == NodeId(28) && self.zoom < 1.2;
-            let x = if beside { c.x + off + 6.0 } else { c.x - w * 0.5 }.clamp(area.x + 4.0, area.x + area.w - w - 4.0).round();
+            let x = if beside { c.x + off + 6.0 } else { c.x - w * 0.5 }.clamp(area.x + edge, area.x + area.w - w - edge).round();
             let y = if beside { c.y + 5.0 } else if self.label_above(def.id) { c.y - off - 5.0 } else { c.y + off + 13.0 }.round();
-            if c.x < area.x - 10.0 || c.x > area.x + area.w + 10.0 || c.y < area.y - 10.0 || c.y > area.y + area.h + 10.0 || y < area.y + 12.0 {
+            if c.x < area.x - 10.0 || c.x > area.x + area.w + 10.0 || c.y < area.y - 10.0 || c.y > area.y + area.h + 10.0 || y < area.y + 12.0 || !self.node_visible(def.id) {
                 continue;
             }
             draw_rectangle(x - 3.0, y - 11.0, w + 6.0, 15.0, alpha(t.bg, 0.88));
-            let col = if style.owned { t.text } else if game.state().nodes[def.id.index()].owner == Owner::Hostile { style.col } else { lerp_color(t.dim, t.text, 0.25) };
+            // A dormant Lab's glyph is darkened; its name is only dimmed, so it stays readable.
+            let dormant = def.rival.filter(|r| game.state().rivals[r.index()].phase == RivalPhase::Dormant);
+            let col = if style.owned {
+                t.text
+            } else if game.state().nodes[def.id.index()].owner != Owner::Hostile {
+                lerp_color(t.dim, t.text, 0.25)
+            } else if let Some(r) = dormant {
+                lerp_color(t.rival(r), t.dim, 0.5)
+            } else {
+                style.col
+            };
             ui.text(def.name, x, y, DENSE, col);
         }
     }
@@ -642,7 +710,7 @@ impl MapView {
             },
         };
         let mut lines = vec![
-            (def.name.to_owned(), if style.owned { t.teal } else { style.col }),
+            (def.name.to_owned(), if style.owned { t.teal } else { t.text }),
             (format!("{}, {}", text::node_kind_name(def.kind), REGIONS[def.region.index()].name), t.dim),
             (state, t.text),
         ];

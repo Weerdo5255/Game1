@@ -78,6 +78,8 @@ pub struct UiState {
     pub told_alarmed: bool,
     /// How often each node has been severed this session, by node index.
     pub severed: Vec<u8>,
+    /// The Demolish button clicked once (node, slot, wall-clock time): a second click within 2 s confirms.
+    pub demolish_armed: Option<(NodeId, u8, f64)>,
 }
 
 pub struct App {
@@ -136,6 +138,7 @@ impl App {
             request: None,
             told_alarmed: false,
             severed: vec![0; game.state().nodes.len()],
+            demolish_armed: None,
         };
         blends(&mut st, stage);
         let card = if flags.wants_title() { Card::Title } else { Card::None };
@@ -156,6 +159,7 @@ impl App {
         st.armed = None;
         st.picker = false;
         st.open_slot = None;
+        st.demolish_armed = None;
         st.selected = st.selected.filter(|n| loaded && n.index() < game.state().nodes.len());
         st.hover_tech = None;
         st.ping = None;

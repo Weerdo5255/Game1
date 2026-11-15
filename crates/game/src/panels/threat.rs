@@ -24,6 +24,14 @@ fn unit_icons(ui: &Ui, units: &[UnitKind], x: f32, cy: f32, col: Color) {
     }
 }
 
+/// The tooltip's sortie line when nothing is telegraphed yet, worded from the countdown the row shows.
+fn next_line(secs: Option<f64>, idle: &str) -> String {
+    match secs {
+        Some(secs) => format!("Next sortie in {}. Its route shows on the map shortly before it leaves.", fmt_secs(secs)),
+        None => idle.to_owned(),
+    }
+}
+
 pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let t = ui.theme;
     let r = L::THREAT;
@@ -86,10 +94,10 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
                         game.sortie_points(source),
                         match pending {
                             Some(p) => format!("{} of {} from {} in {}.", text::sortie_kind_name(p.kind), p.units.len(), text::node_name(p.origin), fmt_secs(p.ticks_left as f64 / 10.0)),
-                            None if live => "No sortie telegraphed.".to_owned(),
-                            None => "Not sortieing.".to_owned(),
+                            None => next_line(game.next_sortie_secs(source).filter(|_| live), "Not sortieing."),
                         }
                     ));
+                    tip = tip.map(|s| format!("{s}\nGold marker on the Grip bar: the Grip a Takeover needs ({:.0}).", game.takeover_grip_needed()));
                     let node = pending.map(|p| p.origin).unwrap_or(def.primary);
                     jump = Some((node, s.nodes[node.index()].owner == Owner::Player, Tab::Humans));
                     if ui.input.left_pressed {
@@ -130,7 +138,7 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
                         match pending {
                             Some(p) => format!("{} of {} in {}.", text::sortie_kind_name(p.kind), p.units.len(), fmt_secs(p.ticks_left as f64 / 10.0)),
                             None if dormant => format!("Wakes at Dominion {}.", def.wake_dominion),
-                            None => "No sortie telegraphed.".to_owned(),
+                            None => next_line(game.next_sortie_secs(source).filter(|_| live), "Not sortieing."),
                         }
                     ));
                     jump = Some((def.lab, s.nodes[def.lab.index()].owner == Owner::Player, Tab::Rivals));
