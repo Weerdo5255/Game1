@@ -39,8 +39,14 @@ pub fn draw(ui: &mut Ui, _st: &mut UiState, game: &mut Game) {
             }
             continue;
         }
-        let bx = Rect::new(x, y + 3.0, 11.0, 11.0);
-        draw_rectangle_lines(bx.x, bx.y, bx.w, bx.h, 1.5, if line.done { t.good } else { t.dim });
+        // Edges on whole screen pixels and at least one pixel thick, so none drops out below 1280x720.
+        let snap = |v: f32| (v * ui.scale).round() / ui.scale;
+        let bx = Rect::new(snap(x), snap(y + 3.0), snap(11.0), snap(11.0));
+        let (px, col) = ((1.0 / ui.scale).max(1.0), if line.done { t.good } else { t.dim });
+        draw_rectangle(bx.x, bx.y, bx.w, px, col);
+        draw_rectangle(bx.x, bx.y + bx.h - px, bx.w, px, col);
+        draw_rectangle(bx.x, bx.y, px, bx.h, col);
+        draw_rectangle(bx.x + bx.w - px, bx.y, px, bx.h, col);
         if line.done {
             draw_line(bx.x + 2.0, bx.y + 6.0, bx.x + 4.5, bx.y + 9.0, 2.0, t.good);
             draw_line(bx.x + 4.5, bx.y + 9.0, bx.x + 9.5, bx.y + 2.0, 2.0, t.good);
