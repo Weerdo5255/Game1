@@ -434,7 +434,12 @@ class World:
         self.events.emit("announce", text=text)
 
     def request(self, type: str, **data: Any) -> None:
+        """Ask the presentation layer for something (a dialogue, a sound, a
+        fade ...).  The play scene empties this queue every frame; headless
+        runs never do, so it is kept from growing without bound."""
         self.requests.append(dict(data, type=type))
+        if len(self.requests) > 256:
+            del self.requests[:128]
 
     def text(self, text: str, ctx: Optional[dict] = None) -> str:
         """Expand ``$PLAYER`` / ``$NPC`` / ``$TIME`` and ``{script}`` in text."""
