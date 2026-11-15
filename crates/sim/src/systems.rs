@@ -329,7 +329,15 @@ fn timers(game: &mut Game) {
         }
     }
 
+    // cooldowns tick before operations resolve, so one set at completion starts full
     let s = &mut game.state;
+    dec(&mut s.grease_cooldown);
+    dec(&mut s.scapegoat_cooldown);
+    for f in s.factions.iter_mut() {
+        dec(&mut f.charm_cooldown);
+        dec(&mut f.memo_cooldown);
+        dec(&mut f.inside_man_cooldown);
+    }
     let mut done = Vec::new();
     let mut k = 0;
     while k < s.ops.len() {
@@ -355,15 +363,8 @@ fn timers(game: &mut Game) {
     }
 
     let s = &mut game.state;
-    dec(&mut s.grease_cooldown);
-    dec(&mut s.scapegoat_cooldown);
     for c in s.ability_cooldowns.iter_mut() {
         dec(c);
-    }
-    for f in s.factions.iter_mut() {
-        dec(&mut f.charm_cooldown);
-        dec(&mut f.memo_cooldown);
-        dec(&mut f.inside_man_cooldown);
     }
     for m in s.modifiers.iter_mut() {
         dec(&mut m.ticks_left);
@@ -745,7 +746,8 @@ fn spawning(game: &mut Game) {
         let fs = &mut game.state.factions[f.index()];
         if !fs.active && game.state.stage >= FACTIONS[f.index()].active_stage {
             fs.active = true;
-            fs.sortie_timer = interval;
+            // the timer is decremented later in this same step
+            fs.sortie_timer = interval + 1;
             game.events.push(Event::FactionActivated { faction: f });
         } else if fs.active && game.state.tick == 1 {
             // factions active from the start announce themselves on the first tick
@@ -761,7 +763,7 @@ fn spawning(game: &mut Game) {
             let interval = calc::sortie_interval_ticks(&game.state, SourceId::Rival(r));
             let rs = &mut game.state.rivals[r.index()];
             rs.phase = RivalPhase::Awake;
-            rs.sortie_timer = interval;
+            rs.sortie_timer = interval + 1;
             game.events.push(Event::RivalWoke { rival: r });
         }
     }
