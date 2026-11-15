@@ -165,8 +165,8 @@ class TextInput(Widget):
                 try:
                     clip = pygame.scrap.get_text() if pygame.scrap.get_init() else ""
                     self.value += "".join(c for c in (clip or "") if c.isprintable())
-                except pygame.error:
-                    pass
+                except (pygame.error, AttributeError, NotImplementedError):
+                    pass                         # no clipboard on this platform / pygame build
             return True
         return False
 

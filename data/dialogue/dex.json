@@ -104,7 +104,7 @@
         "...Ten years I have been running from one bad debt to the next. You know what Osei said when I turned up here? 'Can you count?' That was the whole interview.",
         "Damn you. Fine. It goes back, all of it. And if this station dies anyway I am blaming you personally."
       ],
-      "do": ["set_flag('dex_reformed')", "cancel_goal('dex', 'prep_shuttle')", "move_items('shuttle_hold', 'stores_food', 'ration_pack')", "move_items('shuttle_hold', 'stores_fuel', 'fuel_cell')", "move_items('shuttle_hold', 'stores_parts', 'spare_parts')", "move_items('dex_locker', 'stores_parts', 'spare_parts')", "set_obj('stores_parts', 'access', 'engineering,stores')", "set_flag('stores_open')", "add_rel(15)", "complete_quest('q_smuggler')", "add_morale(5, 'all')"],
+      "do": ["set_flag('dex_reformed')", "cancel_goal('dex', 'prep_shuttle')", "move_items('shuttle_hold', 'stores_food', 'ration_pack')", "move_items('shuttle_hold', 'stores_fuel', 'fuel_cell')", "move_items('shuttle_hold', 'stores_parts', 'spare_parts')", "move_items('dex_locker', 'stores_parts', 'spare_parts')", "set_obj('stores_parts', 'access', 'engineering,stores,auditor')", "set_obj('stores_food', 'access', 'auditor')", "set_obj('stores_misc', 'access', 'auditor')", "give_access('auditor')", "set_flag('stores_open')", "add_rel(15)", "complete_quest('q_smuggler')", "add_morale(5, 'all')"],
       "next": "end"
     },
     "join": {

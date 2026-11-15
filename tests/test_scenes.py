@@ -149,6 +149,23 @@ def test_container_window_and_theft(bot):
     assert bot.scene.name == "play"
 
 
+def test_taking_from_stores_you_were_cleared_for_is_not_theft(bot):
+    w = bot.world
+    bot.walk_to(22, 6)
+    bot.walk_to(22, 4)
+    w.transfer(w.characters["dex"], "hangar", 24, 3)
+    # what the commander's "open the stores" order does
+    w.script.run(["set_obj('stores_parts', 'access', 'engineering,stores,auditor')", "give_access('auditor')"])
+    assert w.find_object("stores_parts").get("restricted"), "still off limits to everybody else"
+    assert bot.go_to_object("stores_parts")
+    bot.interact()
+    assert bot.scene.name == "container"
+    bot.tap("confirm")
+    assert w.player.inventory.count("spare_parts") == 1
+    assert not w.flags.get("thefts_seen")
+    bot.tap("cancel")
+
+
 def test_locked_container_offers_a_bypass(bot):
     bot.walk_to(22, 6)
     bot.walk_to(22, 4)

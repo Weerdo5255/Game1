@@ -232,7 +232,9 @@ class ContainerScene(TwoListScene):
                 w.events.emit("item:" + item_id, item=item_id, count=moved)
                 w.events.emit("took:%s:%s" % (self.obj.id, item_id), item=item_id, container=self.obj.id)
                 ui.sound("pickup")
-                if self.obj.get("restricted") and not self._reported:
+                cleared = any(g in p.access_groups() for g in self.obj.access_groups()) \
+                    or self.obj.get("owner") == "player"
+                if self.obj.get("restricted") and not cleared and not self._reported:
                     self._reported = True
                     seen = w.report_theft(self.obj)
                     if seen is not None:

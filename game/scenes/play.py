@@ -206,6 +206,7 @@ class PlayScene(Scene):
         inp = self.input
         p.speed = config.RUN_SPEED if inp.held("run") else config.WALK_SPEED
         remaining = dt
+        walking = p.moving                      # already in motion when this frame began
         for _ in range(4):
             if p.moving:
                 remaining = movement.advance(world, p, remaining)
@@ -218,8 +219,8 @@ class PlayScene(Scene):
                 return
             if p.facing != direction:
                 p.facing = direction
-                if p.anim_time <= 0 or inp.pressed(direction):
-                    self._turn = 0.085          # a tap just turns on the spot
+                if not walking:
+                    self._turn = 0.085          # from a standstill, a tap just turns on the spot
             if self._turn > 0:
                 self._turn -= remaining
                 p.anim_time = 0.0

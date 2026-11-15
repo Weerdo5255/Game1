@@ -118,7 +118,7 @@
     },
     "stores": {
       "text": "Dex will scream. Let him. As of now engineering draws parts and scrap from the stores without his countersignature. I should have done it a year ago.",
-      "do": ["set_flag('stores_open')", "set_obj('stores_parts', 'access', 'engineering,stores')", "add_rel(-10, 'dex')", "add_rel(8, 'bram')", "log('The Administrator opened the hardware stores to engineering.')"],
+      "do": ["set_flag('stores_open')", "set_obj('stores_parts', 'access', 'engineering,stores,auditor')", "give_access('auditor')", "add_rel(-10, 'dex')", "add_rel(8, 'bram')", "log('The Administrator opened the hardware stores to engineering.')"],
       "next": "hub"
     },
     "charter": {
