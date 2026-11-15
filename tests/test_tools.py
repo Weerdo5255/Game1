@@ -324,3 +324,96 @@ def test_script_reference_document_is_current():
     from game.tools.validate import api_markdown
     with open(os.path.join(config.ROOT, "docs", "SCRIPT_API.md"), encoding="utf-8") as fh:
         assert fh.read().strip() == api_markdown().strip()
+
+
+def test_authoring_tour(data_copy, capsys):
+    """The walkthrough from docs/AUTHORING.md, end to end: a new room, a new
+    crew member with something to say and a project of her own, a quest and a
+    story rule - all of it data, none of it code."""
+    from game.tools import char_editor
+    from game.tools.validate import validate
+    from game.world.gamemap import GameMap
+    from game.world.world import World
+    from tests.helpers import run_hours, talk
+
+    c = Content.load(data_copy)
+
+    # 1. a room (what the map editor does when you paint and place objects)
+    bay = GameMap.new("cargo_bay", "Cargo Bay", 14, 10, "floor_plate")
+    for x in range(14):
+        for y in range(10):
+            if x in (0, 13) or y in (0, 9):
+                bay.set_tile("ground", x, y, "wall")
+    bay.set_tile("ground", 13, 5, "floor_plate")
+    bay.add_object("portal", 13, 5, id="bay_to_hangar", sprite="door_v", label="Hangar Bay",
+                   target_map="hangar", target_x=1, target_y=16)
+    bay.set_tile("objects", 3, 2, "crate")
+    bay.add_object("container", 3, 2, id="salvage_crate", name="Salvage crate", items={"scrap_metal": 6})
+    bay.save(c.map_path("cargo_bay"))
+    hangar = c.load_map("hangar")
+    hangar.set_tile("ground", 0, 16, "floor_plate")
+    hangar.add_object("portal", 0, 16, id="hangar_to_bay", sprite="door_v", label="Cargo Bay",
+                      target_map="cargo_bay", target_x=12, target_y=5)
+    hangar.save(c.map_path("hangar"))
+
+    # 2. a person (the same thing the character creator's New button does)
+    assert char_editor.main(["--new", "Kira Vance", "--role", "technician", "--map", "cargo_bay",
+                             "--seed", "3", "--dialogue"]) == 0
+    assert "wrote" in capsys.readouterr().out
+    c.reload()
+
+    # 3. something to say, 4. something of her own to do
+    kira = json.load(open(c.character_path("kira")))
+    kira["goals"] = [{
+        "id": "haul_salvage", "desc": "Haul the salvage to the fabricator", "priority": 46,
+        "repeat": True, "cooldown": 60,
+        "when": "container_count('salvage_crate', 'scrap_metal') > 0",
+        "steps": [
+            {"do": "acquire", "item": "scrap_metal", "count": 2, "from": ["salvage_crate"]},
+            {"do": "deliver", "item": "scrap_metal", "to": "fab_feed"}
+        ],
+        "on_complete": ["add_var('salvage_runs', 1)"]
+    }]
+    write_json(c.character_path("kira"), kira)
+    dlg = json.load(open(c.dialogue_path("kira")))
+    dlg["nodes"]["hub"]["choices"].insert(0, {
+        "text": "That is a lot of scrap for one person.", "if": "not quest_started('q_salvage')",
+        "do": ["start_quest('q_salvage')"], "goto": "salvage"})
+    dlg["nodes"]["salvage"] = {
+        "text": "Forty years of broken things. The fabricator will eat all of it, two crates a trip.",
+        "next": "hub"}
+    write_json(c.dialogue_path("kira"), dlg)
+
+    # 5. a quest, and a rule that finishes it when she has done the work
+    quests = json.load(open(os.path.join(data_copy, "quests.json")))
+    quests["q_salvage"] = {
+        "name": "Waste Not", "xp": 40,
+        "desc": "Kira Vance is feeding forty years of scrap to the fabricator.",
+        "stages": {"haul": "Three trips should empty the salvage crate."},
+        "outcomes": {"done": "The salvage is in the fabricator's feed bin."}}
+    write_json(os.path.join(data_copy, "quests.json"), quests)
+    rules_path = os.path.join(data_copy, "story", "rules.json")
+    rules = json.load(open(rules_path))
+    rules.append({"id": "salvage_done", "on": "goal_done:kira:haul_salvage", "once": False,
+                  "if": "quest_active('q_salvage') and var('salvage_runs') >= 3",
+                  "do": ["complete_quest('q_salvage')", "add_rel(10, 'kira')"]})
+    write_json(rules_path, rules)
+
+    c.reload()
+    report = validate(c)
+    assert report.errors == [] and report.warnings == [], "\n".join(report.errors + report.warnings)
+
+    # the new content takes part in the simulation like everything else
+    world = World.new_game(c, {"name": "Tester"}, seed=5)
+    npc = world.characters["kira"]
+    assert npc.map_id == "cargo_bay" and npc.home.get("bed")
+    talk(world, "kira", ["That is a lot of scrap"])
+    assert world.quests.status("q_salvage") == "active"
+    for _ in range(12):
+        world.player.needs["hunger"] = world.player.needs["fatigue"] = 0.0
+        run_hours(world, 2)
+    assert world.flags.get("salvage_runs", 0) >= 3
+    assert world.inventory_of(world.find_object("salvage_crate")).count("scrap_metal") == 0
+    assert world.quests.status("q_salvage") == "done"
+    assert npc.opinion_of("player") >= 10
+    assert world.script.errors == []

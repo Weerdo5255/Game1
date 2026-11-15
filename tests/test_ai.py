@@ -158,6 +158,79 @@ def test_goal_templates_and_scripted_goals(world):
     assert ai.find_goal(pip, "repair_comms") is None
 
 
+def test_when_starts_a_goal_and_the_job_is_then_finished(world):
+    """Emptying the shelf makes the start condition false; she must still deliver."""
+    wren = world.characters["wren"]
+    wren.needs["hunger"] = 0.0
+    shelf = world.inventory_of(world.find_object("hydro_shelf"))
+    store = world.inventory_of(world.find_object("hydro_store"))
+    have = shelf.count("nutrient_paste")
+    assert have > 0 and store.count("nutrient_paste") == 0
+    ai.add_goal(world, wren, ai.make_goal("tidy", "Tidy the shelf", 75, [
+        {"do": "acquire", "item": "nutrient_paste", "count": have, "from": ["hydro_shelf"]},
+        {"do": "deliver", "item": "nutrient_paste", "to": "hydro_store"},
+    ], when="container_count('hydro_shelf', 'nutrient_paste') > 0"))
+    run_hours(world, 1.5)
+    assert shelf.count("nutrient_paste") == 0 and wren.inventory.count("nutrient_paste") == 0
+    assert store.count("nutrient_paste") == have
+    assert ai.find_goal(wren, "tidy")["status"] == "done"
+
+
+def test_when_is_not_met_so_the_goal_never_starts(world):
+    wren = world.characters["wren"]
+    shelf = world.inventory_of(world.find_object("hydro_shelf"))
+    before = shelf.count("nutrient_paste")
+    ai.add_goal(world, wren, ai.make_goal("tidy", "Tidy the shelf", 75, [
+        {"do": "acquire", "item": "nutrient_paste", "count": 1, "from": ["hydro_shelf"]},
+        {"do": "deliver", "item": "nutrient_paste", "to": "hydro_store"},
+    ], when="flag('inspection_due')"))
+    run_hours(world, 1.5)
+    assert shelf.count("nutrient_paste") == before and not ai.find_goal(wren, "tidy").get("begun")
+    world.flags["inspection_due"] = True
+    run_hours(world, 1.5)
+    assert ai.find_goal(wren, "tidy")["status"] == "done"
+
+
+def test_while_pauses_a_goal_where_it_stands(world):
+    """`while` is checked the whole time: the goal is put down and picked up again."""
+    wren = world.characters["wren"]
+    wren.needs["hunger"] = 0.0
+    store = world.inventory_of(world.find_object("hydro_store"))
+    wren.inventory.add("nutrient_paste", 2)
+    world.flags["quiet"] = True
+    ai.add_goal(world, wren, ai.make_goal("tidy", "Tidy up", 75, [
+        {"do": "run", "script": ["set_flag('tidy_begun')"]},
+        {"do": "deliver", "item": "nutrient_paste", "to": "hydro_store"},
+    ], **{"while": "not flag('quiet')"}))
+    run_hours(world, 1)
+    assert not world.flags.get("tidy_begun") and store.count("nutrient_paste") == 0
+    world.flags["quiet"] = False
+    run_hours(world, 0.05)
+    assert world.flags.get("tidy_begun") and ai.find_goal(wren, "tidy")["step"] == 1
+    world.flags["quiet"] = True                  # interrupted on the way to the store room
+    wren.ai["think"] = 0.0                       # (she reconsiders at once rather than in a minute or two)
+    run_hours(world, 1)
+    goal = ai.find_goal(wren, "tidy")
+    assert goal["status"] == "active" and goal["step"] == 1 and store.count("nutrient_paste") == 0
+    world.flags["quiet"] = False
+    run_hours(world, 1)
+    assert store.count("nutrient_paste") == 2 and goal["status"] == "done"
+
+
+def test_quartermaster_delivers_what_he_takes_for_the_galley(world):
+    """Taking the rations used to make his own start condition false, leaving
+    him wandering about with the station's lunch in his pockets."""
+    dex = world.characters["dex"]
+    dex.needs["hunger"] = 0.0
+    galley = world.inventory_of(world.find_object("galley_dispenser"))
+    stores = world.inventory_of(world.find_object("stores_food"))
+    galley.items.pop("ration_pack", None)
+    stores.items["ration_pack"] = 5              # after he takes four, fewer than the trigger asks for
+    run_hours(world, 3)
+    assert galley.count("ration_pack") >= 3, "allowing for somebody having an early lunch"
+    assert dex.inventory.count("ration_pack") == 0
+
+
 def test_a_broken_goal_fails_without_stopping_the_world(world):
     world.script.strict = False
     pip = world.characters["pip"]

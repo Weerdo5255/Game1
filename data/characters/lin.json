@@ -67,7 +67,7 @@
       "id": "decode_signal",
       "desc": "Decode the signal from under the ice",
       "priority": 47,
-      "when": "not flag('lin_paused') and not flag('tunnel_sealed')",
+      "while": "not flag('lin_paused') and not flag('tunnel_sealed')",
       "retry": 90,
       "steps": [
         {

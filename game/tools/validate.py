@@ -391,6 +391,7 @@ class Validator:
             if not steps:
                 self.r.error(where, "goal has no steps")
         self.cond(where + "/when", spec.get("when"))
+        self.cond(where + "/while", spec.get("while"))
         self.effects(where + "/on_complete", spec.get("on_complete"))
         self.effects(where + "/on_fail", spec.get("on_fail"))
         systems = c.systems.get("systems") or {}

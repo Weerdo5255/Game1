@@ -5,7 +5,7 @@ ordered list of *steps* - so it can be written in JSON, generated on the fly
 and saved in the middle of execution::
 
     {"id": "decode_signal", "desc": "Decode the signal", "priority": 62,
-     "when": "not flag('lab_sealed')",
+     "while": "not flag('lab_sealed')",
      "steps": [
         {"do": "acquire", "item": "signal_amplifier", "count": 1},
         {"do": "work", "system": "lab", "var": "signal_progress", "target": 30},
@@ -21,6 +21,13 @@ Where goals come from
                and repair it; a machine is out of fuel -> restock it
 * **authored** personal ambitions listed in the character file
 * **story**    goals handed out by scripts (``add_goal``)
+
+A goal may carry two conditions.  ``when`` says when to *start*: once the
+NPC has begun, it is not asked again, so a job is finished even if doing it
+made the condition false (the crate that needed emptying is now empty).
+``while`` must hold the whole time: when it turns false the goal is put down
+where it stands and picked up again later (a night-time errand, a project
+somebody asked them to pause).
 
 Each NPC regularly picks the eligible goal with the highest priority and
 executes its current step.  This runs for every NPC on every map each tick,
@@ -206,9 +213,13 @@ def choose_goal(world, npc, current: Optional[dict]) -> Optional[dict]:
     for goal in npc.goals:
         if goal["status"] != "active" or goal.get("retry_at", 0) > now:
             continue
-        when = goal.get("when")
-        if when and not world.script.eval(when, ctx):
-            continue
+        if not goal.get("begun"):
+            when = goal.get("when")
+            if when and not world.script.eval(when, ctx):
+                continue                      # not the moment to start
+        keep = goal.get("while")
+        if keep and not world.script.eval(keep, ctx):
+            continue                          # paused: it keeps its place until this holds again
         p = float(goal["priority"])
         if goal is current:
             p += HYSTERESIS
@@ -238,6 +249,7 @@ def _switch(world, npc, old: Optional[dict], new: Optional[dict]) -> None:
 def _run_goal(world, npc, goal: dict, dt: float) -> None:
     steps = goal["steps"]
     script = world.script
+    goal["begun"] = True                  # from here on "when" no longer matters, only "while"
     for _ in range(8):                    # several instant steps may chain in one tick
         i = goal["step"]
         if i >= len(steps):
@@ -272,6 +284,8 @@ def _run_goal(world, npc, goal: dict, dt: float) -> None:
             goal["retry_at"] = now + float(spec.get("retry", goal.get("retry", 25)))
             goal["blocks"] = goal.get("blocks", 0) + 1
             goal["state"] = {}
+            if i == 0:
+                goal["begun"] = False     # never got anywhere: wait for the right moment again
             npc.ai["goal"] = ""
             npc.ai["think"] = 0.0
             npc.path = []
@@ -299,7 +313,7 @@ def _complete(world, npc, goal: dict) -> None:
     if goal.get("log", goal.get("source") in ("authored", "story", "duty")):
         world.add_log("%s finished: %s." % (npc.name, goal["desc"]), "crew")
     if goal.get("repeat"):
-        goal.update(status="active", step=0, state={}, announced=False,
+        goal.update(status="active", step=0, state={}, announced=False, begun=False,
                     retry_at=now + float(goal.get("cooldown", 60)), blocks=0)
     elif goal.get("source") in ("routine", "drive", "duty") and goal in npc.goals:
         npc.goals.remove(goal)

@@ -341,3 +341,62 @@ def test_collapse_wakes_the_player_in_the_medbay(bot):
     bot.frames(8)
     assert w.player.map_id == "medlab" and w.clock.minutes >= start + 350
     assert w.player.hp >= w.player.max_hp * 0.39
+
+
+def test_opening_hours_played_through_the_interface(content):
+    """Intro, the sergeant's welcome, the briefing, the reactor quest and the
+    wait screen - walked and clicked the way a player would."""
+    bot = Bot.new_game({"name": "Rin Okabe", "background": "negotiator"}, seed=2, content=content, intro=True)
+    w = bot.world
+    bot.frames(5)
+    assert bot.in_dialogue, "the game opens with the intro"
+    bot.end_dialogue()
+    assert w.quests.stage("q_audit") == "report_in"
+
+    for _ in range(40 * 30):                    # the sergeant comes over on his own
+        if bot.in_dialogue:
+            break
+        bot.frames(1)
+    assert bot.in_dialogue and bot.scene.runner.npc_id == "halloran"
+    assert bot.choose("Nothing is decided")
+    bot.end_dialogue()
+
+    def travel(*portals):
+        for portal in portals:
+            assert bot.use_portal(portal), portal
+
+    def talk_to(char_id, pick):
+        assert bot.go_to_char(char_id), "cannot reach " + char_id
+        bot.interact()
+        assert bot.in_dialogue
+        for _ in range(6):                      # click through introductions until the option appears
+            choices = bot.dialogue_choices()
+            if any(pick.lower() in c.text.lower() for c in choices):
+                break
+            bot.scene.index = [i for i, c in enumerate(choices) if c.enabled][0]
+            bot.tap("confirm", 1)
+        assert bot.choose(pick), "%s never offered %r" % (char_id, pick)
+        bot.end_dialogue()
+
+    travel("hangar_to_hub", "hub_to_command")
+    talk_to("osei", "Show me")
+    assert w.flags.get("audit_authority") and w.quests.stage("q_audit") == "inspect"
+    travel("command_to_hub", "hub_to_eng")
+    talk_to("bram", "Who is giving you forms")
+    assert w.quests.stage("q_reactor") == "parts" and w.systems.get("reactor").condition < 65
+    travel("eng_to_hub", "hub_to_command")
+    talk_to("osei", "I need the stores opened")
+    assert w.flags.get("stores_open")
+
+    bot.tap("wait")                             # sit out the afternoon while the chief works
+    assert bot.scene.name == "wait"
+    bot.scene.menu.index = 2                    # six hours
+    bot.tap("confirm", 2)
+    for _ in range(4000):
+        if bot.scene.name == "play":
+            break
+        bot.frames(1)
+    assert bot.scene.name == "play" and w.clock.hour >= 14
+    assert w.quests.status("q_reactor") == "done" and w.systems.get("reactor").condition > 85
+    assert w.player.inventory.has("tool_belt"), "Bram's thanks"
+    assert w.script.errors == []

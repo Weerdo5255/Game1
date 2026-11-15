@@ -78,7 +78,7 @@
       "priority": 66,
       "log": false,
       "retry": 30,
-      "when": "time_between(1, 4) and day() >= var('dex_next', 2) and not flag('dex_arrested') and not flag('dex_reformed')",
+      "while": "time_between(1, 4) and day() >= var('dex_next', 2) and not flag('dex_arrested') and not flag('dex_reformed')",
       "steps": [
         {
           "do": "acquire",
@@ -154,7 +154,8 @@
       "cooldown": 180,
       "log": false,
       "retry": 120,
-      "when": "time_between(8, 18) and container_count('galley_dispenser', 'ration_pack') < 4 and container_count('stores_food', 'ration_pack') > 2 and not flag('dex_arrested')",
+      "when": "time_between(8, 18) and container_count('galley_dispenser', 'ration_pack') < 4 and container_count('stores_food', 'ration_pack') > 2",
+      "while": "not flag('dex_arrested')",
       "steps": [
         {
           "do": "acquire",
