@@ -1,0 +1,4 @@
+/target
+*.save.json
+/web/*.wasm
+/out

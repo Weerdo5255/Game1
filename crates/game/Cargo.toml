@@ -1,0 +1,12 @@
+[package]
+name = "game"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "quietly_everything"
+path = "src/main.rs"
+
+[dependencies]
+sim = { path = "../sim" }
+macroquad = { version = "0.4", default-features = false }

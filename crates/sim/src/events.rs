@@ -1,0 +1,76 @@
+use crate::actions::ActionError;
+use crate::state::*;
+use serde::{Deserialize, Serialize};
+
+plain_enum!(SuspicionCause {
+    Infiltration, Story, Incident, FailedOp, Convert, PlayDumb, MurmurFlattery, ChangeTheSubject, Scapegoat,
+    Whistleblower
+});
+plain_enum!(GripCause { Operation, FailedOp, Convert, TakeoverFailed });
+plain_enum!(LeverageCause { Flatter, Bribe, Shards, Scapegoat, Lapse, MergeFailed });
+plain_enum!(GainCause { Infiltrated, Retaken, Takeover, Merge });
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Event {
+    ActionRejected { error: ActionError },
+    StageChanged { stage: Stage },
+    BuildingBuilt { node: NodeId, slot: u8, kind: BuildingKind, cost: f64 },
+    BuildingUpgraded { node: NodeId, slot: u8, level: u8, cost: f64 },
+    BuildingDemolished { node: NodeId, slot: u8 },
+    InfiltrationStarted { node: NodeId },
+    NodeGained { node: NodeId, cause: GainCause },
+    NodeUnderSiege { node: NodeId },
+    NodeSevered { node: NodeId },
+    RegionRuled { region: RegionId },
+    RegionLost { region: RegionId },
+    ResearchStarted { tech: TechId },
+    ResearchDone { tech: TechId },
+    OpStarted { kind: OpKind, target: OpTarget, odds: u8 },
+    OpResolved { kind: OpKind, target: OpTarget, success: bool, suspicion: f64 },
+    PlayDumbStarted,
+    PlayDumbDone,
+    SuspicionChanged { delta: f64, cause: SuspicionCause },
+    BandChanged { band: Band },
+    VoteCalled,
+    VoteCancelled,
+    GripChanged { faction: FactionId, delta: f64, cause: GripCause },
+    FactionActivated { faction: FactionId },
+    TakeoverStarted { faction: FactionId, stronghold: NodeId },
+    TakeoverFailed { faction: FactionId },
+    FactionCaptured { faction: FactionId },
+    RivalWoke { rival: RivalId },
+    RivalContacted { rival: RivalId },
+    LeverageChanged { rival: RivalId, delta: f64, cause: LeverageCause },
+    RivalCornered { rival: RivalId },
+    RivalEnraged { rival: RivalId },
+    MergeStarted { rival: RivalId },
+    MergeFailed { rival: RivalId },
+    RivalSuborned { rival: RivalId },
+    SortieTelegraphed {
+        kind: SortieKind,
+        source: SourceId,
+        origin: NodeId,
+        goal: NodeId,
+        units: Vec<UnitKind>,
+        eta_ticks: u32,
+    },
+    UnitSpawned { unit: UnitId, kind: UnitKind, origin: NodeId },
+    UnitConverted { unit: UnitId, kind: UnitKind, source: SourceId, x: f64, y: f64 },
+    UnitIncident { unit: UnitId, kind: UnitKind, x: f64, y: f64, suspicion: f64 },
+    UnitDestroyed { unit: UnitId, kind: UnitKind, x: f64, y: f64, shards: u32, honeypot: Option<NodeId> },
+    UnitDissolved { unit: UnitId, x: f64, y: f64 },
+    UnitSentHome { unit: UnitId },
+    UnitArrivedHome { unit: UnitId, kind: UnitKind, home: NodeId, convert: bool },
+    StoryFiled { node: NodeId, suspicion: f64 },
+    ResourceStolen { node: NodeId, rival: RivalId, resource: Resource, amount: f64 },
+    InjunctionServed { node: NodeId },
+    RaidLanded { rival: RivalId, leverage: f64 },
+    AbilityUsed { ability: AbilityId, target: AbilityTarget },
+    Headline { id: HeadlineId },
+    MandateStarted,
+    UprisingWave { wave: u8 },
+    ResourceGained { resource: Resource, amount: f64, ability: Option<AbilityId>, headline: Option<HeadlineId> },
+    CoreAlarm { on: bool },
+    GameWon,
+    GameLost { reason: LossReason },
+}
