@@ -400,3 +400,136 @@ def test_opening_hours_played_through_the_interface(content):
     assert w.quests.status("q_reactor") == "done" and w.systems.get("reactor").condition > 85
     assert w.player.inventory.has("tool_belt"), "Bram's thanks"
     assert w.script.errors == []
+
+
+def test_verdict_at_the_airlock_ends_the_game_through_the_interface(bot):
+    """Day six: the airlock, the captain, a verdict, the ending slides, the title."""
+    w = bot.world
+    w.fast_forward(w.clock.to_minutes(6, 8) - w.clock.minutes + 30)
+    w.player.needs["hunger"] = w.player.needs["fatigue"] = 0.0
+    w.player.hp = float(w.player.max_hp)
+    w.requests.clear()                           # five neglected days: forget the fainting fits
+    w.transfer(w.player, "hangar", 15, 20)
+    bot.frames(5)
+    bot.close_overlays()
+    assert w.quests.stage("q_audit") == "final"
+    assert bot.go_to_object("airlock")
+    bot.interact()
+    assert bot.in_dialogue and bot.choose("Go through")
+    for _ in range(200):                         # the scene changes hands to the captain
+        if bot.in_dialogue and bot.scene.runner.id == "verdict":
+            break
+        bot.frames(1)
+    assert bot.in_dialogue and bot.scene.runner.id == "verdict"
+    assert bot.choose("It cannot be saved")
+    for _ in range(600):
+        if bot.scene.name == "ending":
+            break
+        if bot.in_dialogue:
+            bot.end_dialogue()
+        bot.frames(1)
+    assert bot.scene.name == "ending" and w.ended == "decommission"
+    for _ in range(200):
+        if bot.scene.name != "ending":
+            break
+        bot.tap("confirm", 3)
+    assert bot.scene.name == "title"
+
+
+def test_real_keyboard_events_drive_the_game(content):
+    """The other tests inject actions; this one sends the events a real
+    keyboard produces, through the same door the window uses."""
+    from game.engine.app import App
+    from game.scenes.title import TitleScene
+    app = App(headless=True, audio=False, content=content, persist_options=False)
+    app.push_scene(TitleScene(app))
+
+    def frame(*events):
+        app.frame_step(1 / 30.0, list(events))
+
+    def down(k, text=""):
+        events = [pygame.event.Event(pygame.KEYDOWN, key=k, mod=0, unicode=text)]
+        if text:
+            events.append(pygame.event.Event(pygame.TEXTINPUT, text=text))
+        frame(*events)
+
+    def up(k):
+        frame(pygame.event.Event(pygame.KEYUP, key=k, mod=0))
+
+    def key(k, text=""):
+        down(k, text)
+        up(k)
+        frame()
+
+    frame()
+    key(pygame.K_RETURN)                                        # "New game"
+    assert app.scene.name == "newgame"
+    for _ in range(20):
+        key(pygame.K_BACKSPACE)
+    for ch in "Rex Quaid":          # r, e, x, q, a, i, d and space are all bound to actions as well
+        key(pygame.K_SPACE if ch == " " else pygame.key.key_code(ch.lower()), ch)
+    scene = app.scene
+    assert scene.name == "newgame" and scene.step == 0 and scene.entry.value == "Rex Quaid"
+    key(pygame.K_RETURN)
+    assert scene.step == 1
+    key(pygame.K_DOWN)
+    key(pygame.K_RETURN)                                        # the second background
+    assert scene.step == 2
+    for _ in range(8):
+        key(pygame.K_DOWN)
+    key(pygame.K_RETURN)                                        # "Begin"
+    for _ in range(90):
+        if app.scene.name == "dialogue":
+            break
+        frame()
+    assert app.scene.name == "dialogue", "the intro plays"
+    world = app.scenes[0].world
+    player = world.player
+    assert player.name == "Rex Quaid" and player.background == "medic"
+    world.characters["halloran"].goals = [g for g in world.characters["halloran"].goals if g["id"] != "greet_auditor"]
+    for _ in range(120):                                        # space bar through the intro
+        if app.scene.name == "play":
+            break
+        key(pygame.K_SPACE)
+    assert app.scene.name == "play"
+
+    start = (player.x, player.y)
+    down(pygame.K_UP)                                           # hold an arrow key: walk
+    for _ in range(25):
+        frame()
+    up(pygame.K_UP)
+    for _ in range(10):
+        frame()
+    assert player.y < start[1] and player.x == start[0]
+    here = (player.x, player.y)
+    down(pygame.K_d)                                            # WASD works too
+    for _ in range(25):
+        frame()
+    up(pygame.K_d)
+    for _ in range(10):
+        frame()
+    assert player.x > here[0] and not player.moving
+
+    key(pygame.K_ESCAPE)
+    assert app.scene.name == "datapad"
+    key(pygame.K_ESCAPE)                                        # the same key closes it, and it stays closed
+    frame()
+    assert app.scene.name == "play"
+    key(pygame.K_TAB)
+    assert app.scene.name == "datapad"
+    key(pygame.K_x)
+    assert app.scene.name == "play"
+    key(pygame.K_i)
+    assert app.scene.name == "datapad" and type(app.scene.tab).__name__ == "ItemsTab"
+    key(pygame.K_r)                                             # next tab
+    assert type(app.scene.tab).__name__ == "JournalTab"
+    key(pygame.K_BACKSPACE)
+    assert app.scene.name == "play"
+    key(pygame.K_t)
+    assert app.scene.name == "wait"
+    key(pygame.K_ESCAPE)
+    assert app.scene.name == "play"
+    key(pygame.K_F5)
+    assert save.read_header("quicksave")["name"] == "Rex Quaid"
+    frame(pygame.event.Event(pygame.QUIT))
+    assert not app.running

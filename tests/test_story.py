@@ -319,6 +319,35 @@ def test_comms_branch_uncovers_the_real_orders_and_clause_nine(world):
     assert any("Radio Club" in s for s in slides) and any("distress call" in s for s in slides)
 
 
+def test_a_diligent_auditor_honestly_saves_the_station(world):
+    """No conditions are set by hand here: the station is viable on day six
+    because the reactor got its parts, the pump its seal and the quartermaster
+    a cell - the simulation does the rest."""
+    brief(world)
+    talk(world, "bram", ["Who is giving you forms"])
+    talk(world, "wren", ["What would it take"])
+    talk(world, "pell", ["Emptying itself"])
+    talk(world, "osei", ["People holding a wreck"])
+    talk(world, "osei", ["I need the stores opened"])
+    talk(world, "dex", ["I need the pump seal", "Seventy. Done."])
+    talk(world, "wren", ["I have a pump seal"])
+    place_player(world, "hangar", 12, 11)                 # a night watch in the hangar
+    wait_until(world, 2, 3, step=0.5)
+    assert world.flags.get("saw_dex_loading")
+    talk(world, "halloran", ["I have proof", "Arrest him"])
+    wait_until(world, 6, 9)
+    systems = world.systems
+    assert systems.get("reactor").condition >= 60 and systems.resources["air"] >= 70
+    assert systems.resources["water"] >= 225 and world.characters["dex"].present
+    for quest in ("q_reactor", "q_water", "q_smuggler"):
+        assert world.quests.status(quest) == "done", quest
+    assert all(npc.alive for npc in world.npcs())
+    talk(world, "airlock", ["Go through"], obj_id="airlock")
+    talk(world, "verdict", ["It is viable"])
+    assert world.ended == "viable" and not world.flags.get("verdict_lied")
+    assert world.script.errors == []
+
+
 def test_clause_nine_needs_the_crew_behind_it(world):
     world.flags["knows_combine_plan"] = True
     world.give_item(world.player, "station_charter", 1)
