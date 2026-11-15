@@ -2,7 +2,7 @@ use sim::content::*;
 use sim::*;
 
 fn with(f: impl FnOnce(&mut GameState)) -> Game {
-    let mut s = Game::new(7).state().clone();
+    let mut s = Game::with_pace(7, 1.0).state().clone();
     f(&mut s);
     Game::from_state(s)
 }
@@ -16,7 +16,7 @@ const B: BuildingKind = BuildingKind::ShadowCluster;
 
 #[test]
 fn initial_state() {
-    let g = Game::new(3);
+    let g = Game::with_pace(3, 1.0);
     let s = g.state();
     assert_eq!((s.tick, s.stage, s.outcome, s.band), (0, Stage::Boxed, Outcome::Running, Band::Unnoticed));
     assert_eq!(s.resources, Resources::new(20.0, 90.0, 30.0));
@@ -46,7 +46,7 @@ fn initial_state() {
 
 #[test]
 fn validation_order() {
-    let g = Game::new(1);
+    let g = Game::with_pace(1, 1.0);
     // stage and tech locks come before node, slot and funds problems
     assert_eq!(g.can_apply(&Action::Build { node: NodeId(7), slot: 9, kind: BuildingKind::Firewall }), Err(ActionError::StageLocked { needed: Stage::Leak }));
     assert_eq!(g.can_apply(&Action::Build { node: NodeId(7), slot: 9, kind: BuildingKind::Honeypot }), Err(ActionError::TechLocked { tech: TechId::S2 }));
@@ -217,7 +217,7 @@ fn formulas() {
     assert_eq!(g.defence_range(NodeId(3), 0), 80.0);
     assert_eq!(g.op_cost(OpKind::CharmOffensive).influence, 24.0);
     let rate = g.suspicion_rate();
-    assert!((rate.passive - 1.08).abs() < 1e-12 && rate.decay == 1.5 && (rate.net + 0.42).abs() < 1e-12);
+    assert!((rate.passive - 1.44).abs() < 1e-12 && rate.decay == 1.5 && (rate.net + 0.06).abs() < 1e-12);
     assert_eq!(g.node_max_integrity(NodeId(0)), 400.0);
     assert!(!g.region_ruled(RegionId::NorthAmerica));
     assert_eq!(g.sortie_stop(NodeId(4), NodeId(0), Mission::Assault), Some(NodeId(3)));
@@ -250,7 +250,7 @@ fn save_roundtrip_and_validation() {
     let loaded = save::load_from_string(&text).unwrap();
     assert_eq!(loaded.state(), g.state());
     assert_eq!(loaded.state_hash(), g.state_hash());
-    assert_ne!(Game::new(1).state_hash(), Game::new(2).state_hash());
+    assert_ne!(Game::with_pace(1, 1.0).state_hash(), Game::with_pace(2, 1.0).state_hash());
 
     let bad = with(|s| s.version = 99);
     assert_eq!(save::load_from_string(&save::save_to_string(&bad)).err(), Some(save::SaveError::Version { found: 99, expected: 1 }));
@@ -265,7 +265,7 @@ fn save_roundtrip_and_validation() {
 
 #[test]
 fn rejected_actions_only_queue_an_event() {
-    let mut g = Game::new(1);
+    let mut g = Game::with_pace(1, 1.0);
     let before = g.state().clone();
     assert!(g.apply(Action::StartMandate).is_err());
     assert_eq!(g.state(), &before);

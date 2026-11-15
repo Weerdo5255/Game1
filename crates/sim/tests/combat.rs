@@ -17,7 +17,7 @@ fn spike(n: u8) -> Action {
 #[test]
 fn first_minute() {
     for seed in [1, 2, 3, 19] {
-        let mut g = Game::new(seed);
+        let mut g = Game::with_pace(seed, 1.0);
         let events = run(&mut g, 400);
         let telegraphs: Vec<_> = events.iter().filter(|(_, e)| matches!(e, Event::SortieTelegraphed { .. })).collect();
         assert_eq!(telegraphs.len(), 1, "one sortie in the first 40 s");
@@ -47,7 +47,7 @@ fn first_minute() {
 // opening the spec promises must be reachable inside its windows.
 #[test]
 fn first_minute_opening_by_hand() {
-    let mut g = Game::new(4);
+    let mut g = Game::with_pace(4, 1.0);
     g.apply(Action::Build { node: CORE, slot: 0, kind: BuildingKind::ShadowCluster }).unwrap();
     g.apply(Action::Build { node: CORE, slot: 1, kind: BuildingKind::SpinDesk }).unwrap();
     assert_eq!(g.state().resources.funds, 0.0);
@@ -670,7 +670,7 @@ fn stacking() {
         assert_eq!(g.dominion(), 9);
         g.suspicion_rate().passive
     };
-    let full = 0.12 * 9.0;
+    let full = 0.16 * 9.0;
     assert_approx(passive(false, false, false), full, "no reducer");
     assert_approx(passive(true, false, false), full * 0.70, "Lamplighters");
     assert_approx(passive(false, true, false), full * 0.75, "MURMUR");
@@ -687,7 +687,7 @@ fn stacking() {
         s.nodes[0].slots[0] = building(BuildingKind::CoverFront, 2);
     });
     let rate = g.suspicion_rate();
-    assert_approx(rate.net, 0.12 * 5.0 - 2.25 - 1.5 + 1.0, "net suspicion per minute");
+    assert_approx(rate.net, 0.16 * 5.0 - 2.25 - 1.5 + 1.0, "net suspicion per minute");
 
     // Leverage: weakness (x2) and S4 (x1.5) are different categories and multiply
     let tally = |funds: f64, s4: bool| {

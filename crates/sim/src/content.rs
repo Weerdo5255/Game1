@@ -1,4 +1,15 @@
 //! Static tables of SPEC section 3. Never serialised.
+//!
+//! BALANCE NOTES (numbers that differ from SPEC section 3 after tuning against the bot tests, protocol 4.6):
+//! - T.PACE 1.0 -> 0.95 (knob 1): the Steward's median win moves from about 33:10 to about 35:45.
+//! - Base points of every faction and rival x1.2 (knob 2): Prudence 5 -> 6, Lamplighters 4 -> 4.8,
+//!   Continuity 7 -> 8.4, GLADHAND 3 -> 3.6, TALLYMAN 4 -> 4.8, MURMUR 4 -> 4.8, OBELISK 6 -> 7.2,
+//!   CHAPERONE 7 -> 8.4. At x1.0 the Steward almost never loses a node; at x1.3 it loses most runs.
+//! - T.PASSIVE_PER_DOMINION_PER_MIN 0.12 -> 0.16 (knob 3): a deceiving player otherwise sits in the
+//!   Unnoticed band for most of the run.
+//! - Uprising waves (table 3.12), per entry Stronghold: waves 1-3 two -> three Response Teams; waves 4-6
+//!   two -> three Response Teams plus the Special Counsel; waves 7-8 one -> two Kill-Switch Convoys plus two
+//!   Response Teams. With the table as specified a level-3 home lane takes no Core damage at all.
 use crate::state::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -263,7 +274,7 @@ pub struct Tuning {
 }
 
 pub static TUNING: Tuning = Tuning {
-    pace: 1.0,
+    pace: 0.95,
     start: Resources::new(20.0, 90.0, 30.0),
     start_suspicion: 10.0,
     core_income: Resources::new(1.0, 1.0, 0.5),
@@ -305,7 +316,7 @@ pub static TUNING: Tuning = Tuning {
     retake_secs: 10.0,
     infil_suspicion: 2.0,
     stronghold_infil_suspicion: 4.0,
-    passive_per_dominion_per_min: 0.12,
+    passive_per_dominion_per_min: 0.16,
     passive_reducer_cap: 0.75,
     decay_per_min: 1.5,
     decay_g1: 2.25,
@@ -846,7 +857,7 @@ pub static FACTIONS: [FactionDef; 3] = [
         secondary: NodeId(13),
         active_stage: St::Boxed,
         sortie_secs: 50,
-        base_points: 5.0,
+        base_points: 6.0,
         units: &[U::SpecialCounsel, U::Auditor],
         reward_text: "Building prices -15%; operation odds +10.",
     },
@@ -857,7 +868,7 @@ pub static FACTIONS: [FactionDef; 3] = [
         secondary: NodeId(18),
         active_stage: St::Leak,
         sortie_secs: 40,
-        base_points: 4.0,
+        base_points: 4.8,
         units: &[U::Reporter],
         reward_text: "Passive Suspicion reduced 30%.",
     },
@@ -868,7 +879,7 @@ pub static FACTIONS: [FactionDef; 3] = [
         secondary: NodeId(28),
         active_stage: St::Foothold,
         sortie_secs: 70,
-        base_points: 7.0,
+        base_points: 8.4,
         units: &[U::KillSwitchConvoy, U::ResponseTeam],
         reward_text: "Node integrity +30%; defence damage +20%.",
     },
@@ -883,7 +894,7 @@ pub static RIVALS: [RivalDef; 5] = [
         lab: NodeId(9),
         bridgehead: NodeId(5),
         wake_dominion: 13,
-        base_points: 3.0,
+        base_points: 3.6,
         units: &[U::Probe],
         steals: Influence,
         accepts: &[Verb::Flatter, Verb::Bribe, Verb::FeedShards],
@@ -901,7 +912,7 @@ pub static RIVALS: [RivalDef; 5] = [
         lab: NodeId(14),
         bridgehead: NodeId(11),
         wake_dominion: 17,
-        base_points: 4.0,
+        base_points: 4.8,
         units: &[U::Worm, U::Probe],
         steals: Funds,
         accepts: &[Verb::Bribe, Verb::FeedShards],
@@ -919,7 +930,7 @@ pub static RIVALS: [RivalDef; 5] = [
         lab: NodeId(19),
         bridgehead: NodeId(15),
         wake_dominion: 30,
-        base_points: 4.0,
+        base_points: 4.8,
         units: &[U::Worm, U::Probe],
         steals: Influence,
         accepts: &[Verb::Flatter, Verb::FeedShards],
@@ -937,7 +948,7 @@ pub static RIVALS: [RivalDef; 5] = [
         lab: NodeId(24),
         bridgehead: NodeId(20),
         wake_dominion: 42,
-        base_points: 6.0,
+        base_points: 7.2,
         units: &[U::HunterKiller, U::Worm],
         steals: Compute,
         accepts: &[Verb::FeedShards],
@@ -955,7 +966,7 @@ pub static RIVALS: [RivalDef; 5] = [
         lab: NodeId(29),
         bridgehead: NodeId(27),
         wake_dominion: 55,
-        base_points: 7.0,
+        base_points: 8.4,
         units: &[U::HunterKiller, U::Worm],
         steals: Compute,
         accepts: &[Verb::Flatter, Verb::FeedShards],
@@ -1047,9 +1058,9 @@ pub const UPRISING_WAVES: u8 = 8;
 /// Units each entry Stronghold spawns for wave 1..=8 (empty outside that range).
 pub fn uprising_wave(wave: u8) -> &'static [UnitKind] {
     match wave {
-        1..=3 => &[U::ResponseTeam, U::ResponseTeam],
-        4..=6 => &[U::ResponseTeam, U::ResponseTeam, U::SpecialCounsel],
-        7..=8 => &[U::KillSwitchConvoy, U::ResponseTeam, U::ResponseTeam],
+        1..=3 => &[U::ResponseTeam, U::ResponseTeam, U::ResponseTeam],
+        4..=6 => &[U::ResponseTeam, U::ResponseTeam, U::ResponseTeam, U::SpecialCounsel],
+        7..=8 => &[U::KillSwitchConvoy, U::KillSwitchConvoy, U::ResponseTeam, U::ResponseTeam],
         _ => &[],
     }
 }

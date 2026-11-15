@@ -86,7 +86,7 @@ fn neighbours_match_links() {
 
 #[test]
 fn routes_to_core_match_reference() {
-    let g = Game::new(1);
+    let g = Game::with_pace(1, 1.0);
     let ids = |v: &[u8]| v.iter().map(|&n| NodeId(n)).collect::<Vec<_>>();
     let cases: [(&[u8], f64); 11] = [
         (&[4, 3, 1, 0], 350.0),

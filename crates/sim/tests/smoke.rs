@@ -3,7 +3,7 @@ use sim::*;
 
 #[test]
 fn untouched_game_is_deleted_within_fifteen_minutes() {
-    let mut g = Game::new(1);
+    let mut g = Game::with_pace(1, 1.0);
     for t in 0..9_000 {
         g.tick();
         if t % 600 == 0 {
@@ -15,7 +15,7 @@ fn untouched_game_is_deleted_within_fifteen_minutes() {
 
 #[test]
 fn scripted_first_auditor() {
-    let mut g = Game::new(5);
+    let mut g = Game::with_pace(5, 1.0);
     let mut telegraphed = None;
     let mut spawned = None;
     while g.state().tick < 400 {
@@ -42,7 +42,7 @@ fn scripted_first_auditor() {
 
 #[test]
 fn hand_driven_opening_reaches_leak_and_saves() {
-    let mut g = Game::new(2);
+    let mut g = Game::with_pace(2, 1.0);
     g.apply(Action::Build { node: NodeId(0), slot: 0, kind: BuildingKind::ShadowCluster }).unwrap();
     g.apply(Action::Build { node: NodeId(0), slot: 1, kind: BuildingKind::SpinDesk }).unwrap();
     g.apply(Action::StartOp { kind: OpKind::CharmOffensive, target: OpTarget::Faction(FactionId::Prudence) }).unwrap();
@@ -85,7 +85,7 @@ fn hand_driven_opening_reaches_leak_and_saves() {
 }
 
 fn with(f: impl FnOnce(&mut GameState)) -> Game {
-    let mut s = Game::new(7).state().clone();
+    let mut s = Game::with_pace(7, 1.0).state().clone();
     f(&mut s);
     Game::from_state(s)
 }
@@ -217,7 +217,7 @@ fn mandate_spawns_eight_waves_and_can_be_won() {
         }
     }
     assert_eq!(waves, 8);
-    assert_eq!((spawns[4], spawns[8], spawns[13]), (21, 21, 21));
+    assert_eq!((spawns[4], spawns[8], spawns[13]), (29, 29, 29));
     assert_eq!((g.state().outcome, g.state().tick), (Outcome::Won, 1800));
     assert_eq!(g.dominion(), 100);
     assert_eq!(g.state().suspicion, 100.0);

@@ -68,8 +68,8 @@ fn takeover_and_merge() {
             match e {
                 Event::SortieTelegraphed { kind: SortieKind::LastStand, source, origin, goal, units, eta_ticks } => {
                     assert_eq!((source, origin, goal, eta_ticks), (PRUDENCE, NodeId(4), NodeId(3), 0));
-                    // 5 x Threat 1.2 x 1.5 = 9 points from [Special Counsel 12, Response Team 6, Auditor 4]
-                    assert_eq!(units, vec![UnitKind::ResponseTeam]);
+                    // 6 x Threat 1.2 x 1.5 = 10.8 points from [Special Counsel 12, Response Team 6, Auditor 4]
+                    assert_eq!(units, vec![UnitKind::ResponseTeam, UnitKind::Auditor]);
                     last_stands.push(t);
                 }
                 Event::UnitSpawned { unit, kind: UnitKind::ResponseTeam, .. } => {
@@ -208,8 +208,8 @@ fn takeover_and_merge() {
             match e {
                 Event::SortieTelegraphed { kind: SortieKind::Convulsion, source, origin, goal, units, eta_ticks } => {
                     assert_eq!((source, origin, goal, eta_ticks), (SourceId::Rival(RivalId::Gladhand), NodeId(9), NodeId(5), 0));
-                    // 3 x Threat (about 1.28): a Worm costs 5, so one Probe
-                    assert_eq!(units, vec![UnitKind::Probe]);
+                    // 3.6 x Threat (about 1.28) = 4.6 points: two Probes, or a Worm (5) once the carry allows it
+                    assert!(units == vec![UnitKind::Probe, UnitKind::Probe] || units == vec![UnitKind::Worm], "{units:?}");
                     convulsions.push(t);
                 }
                 Event::RivalSuborned { rival: RivalId::Gladhand } => suborned_at = Some(t),
@@ -290,9 +290,9 @@ fn takeover_and_merge() {
 fn expected_wave(wave: u8) -> Vec<UnitKind> {
     use UnitKind::*;
     let mut v = match wave {
-        1..=3 => vec![ResponseTeam, ResponseTeam],
-        4..=6 => vec![ResponseTeam, ResponseTeam, SpecialCounsel],
-        _ => vec![KillSwitchConvoy, ResponseTeam, ResponseTeam],
+        1..=3 => vec![ResponseTeam, ResponseTeam, ResponseTeam],
+        4..=6 => vec![ResponseTeam, ResponseTeam, ResponseTeam, SpecialCounsel],
+        _ => vec![KillSwitchConvoy, KillSwitchConvoy, ResponseTeam, ResponseTeam],
     };
     v.sort();
     v
@@ -349,8 +349,8 @@ fn finale(mut g: Game) {
     let all: Vec<(u8, u8)> = (1..=8u8).flat_map(|w| [(w, 4), (w, 8), (w, 13)]).collect();
     telegraphs.sort();
     assert_eq!(telegraphs, all);
-    assert_eq!((spawns[4], spawns[8], spawns[13]), (21, 21, 21));
-    assert_eq!(spawns.iter().sum::<u32>(), 63);
+    assert_eq!((spawns[4], spawns[8], spawns[13]), (29, 29, 29));
+    assert_eq!(spawns.iter().sum::<u32>(), 87);
     assert!(regular > 0, "regular sorties from the remaining sources continue");
     assert_eq!(g.state().outcome, Outcome::Won);
     assert_eq!(g.state().tick, start + 1800);
@@ -511,7 +511,7 @@ fn stage_unlocks() {
     }
 
     // the Stage 1 verbs really work with the starting stock, and operation slots bind
-    let mut g = Game::new(112);
+    let mut g = Game::with_pace(112, 1.0);
     g.apply(build(0, BuildingKind::ShadowCluster)).unwrap();
     let charm = Action::StartOp { kind: OpKind::CharmOffensive, target: prudence };
     g.apply(charm.clone()).unwrap();
@@ -610,7 +610,7 @@ fn operations() {
     let charm = Action::StartOp { kind: OpKind::CharmOffensive, target: prudence };
 
     // timing: 12 s to resolve, the 25 s cooldown starts at completion
-    let mut g = Game::new(121);
+    let mut g = Game::with_pace(121, 1.0);
     g.apply(charm.clone()).unwrap();
     assert_eq!(g.state().ops[0].odds, 85);
     let events = run(&mut g, 120);
@@ -746,9 +746,9 @@ fn operations() {
         assert_eq!(kinds[f][0], SortieKind::Scapegoated, "faction {f}");
         assert!(kinds[f][1..].iter().all(|k| *k == SortieKind::Regular), "only the next sortie is redirected");
     }
-    // 2 Auditors, 2 Reporters and 2 Response Teams at Threat 2.2: six raiders, +3 each, capped at 15 per cast
-    assert_eq!(raiders, 6);
-    assert_eq!(landed.len(), 6, "every raider reaches Brightwell Annex");
+    // 1 Special Counsel, 3 Reporters and 3 Response Teams at Threat 2.2: seven raiders, +3 each, capped at 15 per cast
+    assert_eq!(raiders, 7);
+    assert_eq!(landed.len(), 7, "every raider reaches Brightwell Annex");
     assert_approx(landed.iter().sum(), 15.0, "raid leverage");
     assert_approx(g.state().rivals[0].leverage, 15.0, "GLADHAND leverage");
     assert!(landed.iter().all(|l| approx(*l, 3.0) || approx(*l, 0.0)));
@@ -825,7 +825,7 @@ fn headlines() {
         s.modifiers.push(Modifier { headline: HeadlineId::SlowNewsDay, ticks_left: 600 });
         put(s, UnitKind::Auditor, PRUDENCE, 4, 4, 3, 0.0, 60.0);
     });
-    let calm = Game::new(145);
+    let calm = Game::with_pace(145, 1.0);
     assert_approx(g.suspicion_rate().decay, 4.5, "slow news day");
     run(&mut g, 10);
     assert_approx(g.state().units[0].progress, 7.7, "solar weather");

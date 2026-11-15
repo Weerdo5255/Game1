@@ -10,7 +10,7 @@ pub const LAMPLIGHTERS: SourceId = SourceId::Faction(FactionId::Lamplighters);
 pub const CONTINUITY: SourceId = SourceId::Faction(FactionId::Continuity);
 
 pub fn with(seed: u64, f: impl FnOnce(&mut GameState)) -> Game {
-    let mut s = Game::new(seed).state().clone();
+    let mut s = Game::with_pace(seed, 1.0).state().clone();
     f(&mut s);
     Game::from_state(s)
 }
@@ -276,7 +276,7 @@ fn activate(s: &mut GameState, f: FactionId, grip: f64) {
 pub fn midgame(variant: u32) -> Game {
     match variant {
         0 => {
-            let mut g = Game::new(11);
+            let mut g = Game::with_pace(11, 1.0);
             g.apply(Action::Build { node: CORE, slot: 0, kind: BuildingKind::ShadowCluster }).unwrap();
             run(&mut g, 300);
             g

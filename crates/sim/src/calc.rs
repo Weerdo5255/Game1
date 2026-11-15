@@ -949,11 +949,12 @@ mod tests {
         let mut g = crate::Game::new(1);
         g.state.tick = 200;
         let pts = sortie_points(&g.state, SourceId::Faction(FactionId::Prudence));
-        assert!(pts < 4.0 && pts > 3.0);
+        // base 6 x Threat 1.128 x Unnoticed 0.6
+        assert!(pts < 4.1 && pts > 4.0);
         let mut carry = 0.0;
         let list = sortie_units(SourceId::Faction(FactionId::Prudence), SortieKind::Scripted);
         assert_eq!(compose_sortie(&list, pts, &mut carry, Stage::Boxed, true), vec![UnitKind::Auditor]);
-        assert_eq!(carry, 0.0);
+        assert!((carry - (pts - 4.0)).abs() < 1e-12);
     }
 
     #[test]

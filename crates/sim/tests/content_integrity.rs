@@ -2,7 +2,7 @@ use sim::content::*;
 use sim::*;
 
 fn with(f: impl FnOnce(&mut GameState)) -> Game {
-    let mut s = Game::new(7).state().clone();
+    let mut s = Game::with_pace(7, 1.0).state().clone();
     f(&mut s);
     Game::from_state(s)
 }
@@ -63,8 +63,9 @@ fn content_integrity() {
     for &e in UPRISING_ENTRIES.iter() {
         assert_eq!(NODES[e.index()].kind, NodeKind::Stronghold);
     }
-    assert_eq!(uprising_wave(1).len(), 2);
-    assert_eq!(uprising_wave(4).len(), 3);
+    assert_eq!(uprising_wave(1).len(), 3);
+    assert_eq!(uprising_wave(4).len(), 4);
+    assert_eq!(uprising_wave(8).len(), 4);
     assert_eq!(uprising_wave(8)[0], UnitKind::KillSwitchConvoy);
     assert!(uprising_wave(0).is_empty() && uprising_wave(9).is_empty());
 }
@@ -128,7 +129,7 @@ fn infiltration_price_reference() {
 
 #[test]
 fn rival_derived_costs() {
-    let g = Game::new(1);
+    let g = Game::with_pace(1, 1.0);
     let contact = [225.0, 450.0, 1200.0, 3000.0, 6750.0];
     let flatter = [60.0, 120.0, 320.0, 800.0, 1800.0];
     let bribe = [90.0, 180.0, 480.0, 1200.0, 2700.0];

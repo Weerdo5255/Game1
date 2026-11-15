@@ -110,7 +110,7 @@ fn determinism() {
 
     // two seeds diverge, beyond the seed field itself
     let play = |seed: u64| {
-        let mut g = Game::new(seed);
+        let mut g = Game::with_pace(seed, 1.0);
         g.apply(Action::Build { node: CORE, slot: 0, kind: BuildingKind::ShadowCluster }).unwrap();
         g.apply(Action::StartOp { kind: OpKind::CharmOffensive, target: OpTarget::Faction(FactionId::Prudence) }).unwrap();
         let mut log = Vec::new();
@@ -159,7 +159,7 @@ fn save_load_roundtrip() {
     roundtrip(&g, 3, 1500);
 
     // early game, mid-telegraph
-    let mut g = Game::new(21);
+    let mut g = Game::with_pace(21, 1.0);
     run(&mut g, 250);
     assert_eq!(g.state().pending_sorties.len(), 1);
     roundtrip(&g, 4, 1500);

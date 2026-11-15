@@ -38,7 +38,7 @@ const RESEARCH_ORDER: [TechId; 15] = [
 ];
 const INFIL_ORDER: [u8; 18] = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 17, 20, 21, 22, 25, 26, 27];
 const ECONOMY: [BuildingKind; 3] = [BuildingKind::ShadowCluster, BuildingKind::ShellCompany, BuildingKind::PersonaFarm];
-/// The next research is saved for once current Compute income would cover the shortfall within this long.
+/// A research of row 3 or later is saved for once current Compute income would cover the shortfall within this long.
 const RESEARCH_SAVE_SECS: f64 = 240.0;
 const ECONOMY_WEIGHT: [f64; 3] = [1.0, 1.0, 0.4];
 
@@ -46,7 +46,7 @@ fn base_plan(node: NodeId) -> &'static [Plan] {
     use BuildingKind::*;
     use Plan::{B, E};
     match node.0 {
-        0 => &[B(ShadowCluster), B(SpinDesk), E, E],
+        0 => &[B(ShadowCluster), B(SpinDesk), B(Firewall), E],
         1 => &[E, E, E],
         2 | 3 | 7 | 12 | 17 | 22 => &[B(SpinDesk), B(Firewall), E],
         5 | 15 | 20 | 27 => &[B(Firewall), B(Honeypot), E],
@@ -382,7 +382,9 @@ fn research_reserve(s: &GameState) -> f64 {
     }
     match RESEARCH_ORDER.iter().copied().find(|&t| !calc::has(s, t)) {
         Some(t) => match calc::tech_status(s, t) {
-            TechStatus::TooExpensive { missing } if missing <= RESEARCH_SAVE_SECS * calc::income(s).compute => TECHS[t.index()].cost,
+            TechStatus::TooExpensive { missing } if TECHS[t.index()].row >= 3 && missing <= RESEARCH_SAVE_SECS * calc::income(s).compute => {
+                TECHS[t.index()].cost
+            }
             _ => 0.0,
         },
         None => 0.0,
