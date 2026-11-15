@@ -3,7 +3,7 @@ use crate::calc;
 use crate::content::*;
 use crate::state::*;
 use crate::systems;
-use crate::Game;
+use crate::{Game, TechStatus};
 
 plain_enum!(BotKind { Steward, Idle, NoDefence, Glutton });
 
@@ -38,6 +38,8 @@ const RESEARCH_ORDER: [TechId; 15] = [
 ];
 const INFIL_ORDER: [u8; 18] = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 17, 20, 21, 22, 25, 26, 27];
 const ECONOMY: [BuildingKind; 3] = [BuildingKind::ShadowCluster, BuildingKind::ShellCompany, BuildingKind::PersonaFarm];
+/// The next research is saved for once current Compute income would cover the shortfall within this long.
+const RESEARCH_SAVE_SECS: f64 = 240.0;
 const ECONOMY_WEIGHT: [f64; 3] = [1.0, 1.0, 0.4];
 
 fn base_plan(node: NodeId) -> &'static [Plan] {
@@ -166,7 +168,8 @@ impl Bot {
                 }
             }
         }
-        if self.kind == BotKind::Glutton {
+        // Suspicion is pinned while the Mandate runs: venting would only cost output
+        if self.kind == BotKind::Glutton || s.mandate.is_some() {
             return None;
         }
         if s.suspicion >= 70.0 {
@@ -302,7 +305,8 @@ impl Bot {
 
     fn economy_kind(&self, g: &Game, node: NodeId) -> Option<BuildingKind> {
         let s = &g.state;
-        let income = calc::income(s);
+        // income before penalties, so a Play Dumb pause does not read as "no Compute"
+        let income = calc::income_all(s).map(|b| s.pace * (b.base + b.buildings + b.ruled_bonus) * (1.0 + b.bonus_pct));
         let mut best: Option<(f64, BuildingKind)> = None;
         for (i, &kind) in ECONOMY.iter().enumerate() {
             if calc::building_unlocked(s, kind).is_err() {
@@ -310,7 +314,7 @@ impl Bot {
             }
             let def = &BUILDINGS[kind.index()];
             let affinity = if def.affinity.contains(&NODES[node.index()].kind) { TUNING.affinity_mult } else { 1.0 };
-            let score = income.get(Resource::ALL[i]) / ECONOMY_WEIGHT[i] / affinity;
+            let score = income[i] / ECONOMY_WEIGHT[i] / affinity;
             if best.is_none_or(|(b, _)| score < b) {
                 best = Some((score, kind));
             }
@@ -371,6 +375,24 @@ impl Bot {
     }
 }
 
+/// Compute held back for the next research: rules 5 and 8 may not spend it.
+fn research_reserve(s: &GameState) -> f64 {
+    if s.research.is_some() || (s.stage == Stage::Sovereign && s.mandate.is_none()) {
+        return 0.0;
+    }
+    match RESEARCH_ORDER.iter().copied().find(|&t| !calc::has(s, t)) {
+        Some(t) => match calc::tech_status(s, t) {
+            TechStatus::TooExpensive { missing } if missing <= RESEARCH_SAVE_SECS * calc::income(s).compute => TECHS[t.index()].cost,
+            _ => 0.0,
+        },
+        None => 0.0,
+    }
+}
+
+fn spares(s: &GameState, cost: Cost) -> bool {
+    s.resources.compute - cost.compute >= research_reserve(s)
+}
+
 fn research(g: &Game) -> Option<Action> {
     let s = &g.state;
     if s.research.is_some() {
@@ -392,7 +414,7 @@ fn suborn(g: &Game) -> Option<Action> {
     let s = &g.state;
     let rival = suborn_target(s)?;
     match s.rivals[rival.index()].phase {
-        RivalPhase::Awake => ok(g, Action::Contact { rival }),
+        RivalPhase::Awake if spares(s, calc::contact_cost(s, rival)) => ok(g, Action::Contact { rival }),
         RivalPhase::Contacted => ok(g, Action::FeedShards { rival })
             .or_else(|| ok(g, Action::Flatter { rival }))
             .or_else(|| ok(g, Action::Bribe { rival })),
@@ -422,7 +444,11 @@ fn infiltrate(g: &Game) -> Option<Action> {
     let severed = (0..s.nodes.len() as u8).map(NodeId).filter(|n| s.nodes[n.index()].severed);
     let ordered = INFIL_ORDER.iter().map(|&n| NodeId(n)).filter(|n| s.nodes[n.index()].owner == Owner::Neutral);
     let compliant = (0..s.nodes.len() as u8).map(NodeId).filter(|n| s.nodes[n.index()].compliant);
-    severed.chain(ordered).chain(compliant).find_map(|node| ok(g, Action::Infiltrate { node }))
+    severed
+        .chain(ordered)
+        .chain(compliant)
+        .filter(|&node| s.nodes[node.index()].severed || spares(s, calc::infiltration_cost(s, node)))
+        .find_map(|node| ok(g, Action::Infiltrate { node }))
 }
 
 #[derive(Clone, Debug, PartialEq)]

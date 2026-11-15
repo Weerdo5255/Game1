@@ -69,10 +69,31 @@ fn main() {
                         | Event::FactionCaptured { .. }
                         | Event::RivalSuborned { .. }
                         | Event::VoteCalled
-                        | Event::MandateStarted => println!("    {} {:?}", mmss(s.tick), e),
+                        | Event::MandateStarted
+                        | Event::ResearchDone { .. }
+                        | Event::MergeStarted { .. }
+                        | Event::TakeoverStarted { .. }
+                        | Event::RivalContacted { .. }
+                        | Event::RivalWoke { .. }
+                        | Event::RivalEnraged { .. }
+                        | Event::StageChanged { .. } => println!("    {} {:?}", mmss(s.tick), e),
                         _ => {}
                     }
                 }
+            }
+            if verbose && core < 0.6 && s.tick % 100 == 0 {
+                let at: Vec<String> = s.units.iter().filter(|u| u.sieging == Some(sim::NodeId(0))).map(|u| format!("{:?}/{:?}/{:?}:{:.0}", u.kind, u.source, u.sortie, u.hp)).collect();
+                let b: Vec<String> = s.nodes[0].slots.iter().flatten().map(|b| format!("{:?}{}", b.kind, b.level)).collect();
+                println!("    {} core {:3.0}% {:?} sieged by {:?}", mmss(s.tick), core * 100.0, b, at);
+            }
+            if verbose && s.tick % 3000 == 0 {
+                for (n, node) in s.nodes.iter().enumerate() {
+                    if node.owner == sim::Owner::Player {
+                        let b: Vec<String> = node.slots.iter().map(|b| b.as_ref().map(|b| format!("{:?}{}", b.kind, b.level)).unwrap_or("-".into())).collect();
+                        println!("      node {:2} {:4.0} {}", n, node.integrity, b.join(" "));
+                    }
+                }
+                println!("      purchases {:?} route 24->0 {:?} 23->0 {:?} 4->0 {:?} 8->0 {:?} 13->0 {:?}", s.purchases, game.route(sim::NodeId(24), sim::NodeId(0)), game.route(sim::NodeId(23), sim::NodeId(0)), game.route(sim::NodeId(4), sim::NodeId(0)), game.route(sim::NodeId(8), sim::NodeId(0)), game.route(sim::NodeId(13), sim::NodeId(0)));
             }
             if verbose && s.tick % 1200 == 0 {
                 let inc = game.income();
