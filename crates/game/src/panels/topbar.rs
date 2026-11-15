@@ -1,10 +1,10 @@
-use crate::app::UiState;
+use crate::app::{Request, UiState};
 use crate::layout as L;
 use crate::text;
 use crate::theme::{alpha, lerp_color};
 use crate::ui::{fmt_clock, fmt_num, fmt_rate, fmt_secs, Ui, BODY, DENSE, HEADER, SMALL};
 use macroquad::prelude::*;
-use sim::{Game, Resource};
+use sim::{Game, Outcome, Resource};
 
 pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let t = ui.theme;
@@ -126,7 +126,26 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
         ui.text_center("PAUSED", L::MAP.x + L::MAP.w * 0.5, L::MAP.y + L::MAP.h - 14.0, HEADER, t.text);
     }
 
-    // Save and Load are wired by storage.rs; until then they are visibly disabled.
-    ui.button(L::TOP_SAVE, "Save", false);
-    ui.button(L::TOP_LOAD, "Load", false);
+    // Save and Load: one slot. The app carries the request out after the panels are drawn.
+    let running = game.state().outcome == Outcome::Running;
+    if ui.button(L::TOP_SAVE, text::BTN_SAVE, running) {
+        st.request = Some(Request::Save);
+    }
+    if ui.hovered(L::TOP_SAVE) {
+        if running {
+            ui.tip(text::SAVE_TIP);
+        } else {
+            ui.tip_err(text::SAVE_TIP, text::RUN_OVER);
+        }
+    }
+    if ui.button(L::TOP_LOAD, text::BTN_LOAD, st.has_save) {
+        st.request = Some(Request::Load);
+    }
+    if ui.hovered(L::TOP_LOAD) {
+        if st.has_save {
+            ui.tip(text::LOAD_TIP);
+        } else {
+            ui.tip_err(text::LOAD_TIP, text::NO_SAVE);
+        }
+    }
 }

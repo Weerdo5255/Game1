@@ -38,6 +38,13 @@ impl Ui {
     pub fn text(&self, s: &str, x: f32, y: f32, px: f32, color: Color) {
         draw_text_ex(s, x, y, self.params(px, color));
     }
+    /// Text rotated about its baseline origin (radians) and magnified by `zoom` without a new font size.
+    pub fn text_rot(&self, s: &str, x: f32, y: f32, px: f32, color: Color, rotation: f32, zoom: f32) {
+        let mut p = self.params(px, color);
+        p.rotation = rotation;
+        p.font_scale *= zoom;
+        draw_text_ex(s, x, y, p);
+    }
     pub fn measure(&self, s: &str, px: f32) -> f32 {
         measure_text(s, None, (px * self.scale).round().max(1.0) as u16, 1.0 / self.scale).width
     }
@@ -89,10 +96,10 @@ impl Ui {
     pub fn frame(&self, r: Rect) {
         let t = &self.theme;
         draw_rectangle(r.x, r.y, r.w, r.h, t.panel);
-        let border = if t.stage == Stage::Sovereign { alpha(t.gold, 0.7) } else { t.border };
+        let border = lerp_color(t.border, lerp_color(t.border, t.gold, 0.7), t.trim);
         draw_rectangle_lines(r.x + 0.5, r.y + 0.5, r.w - 1.0, r.h - 1.0, 2.0, border);
-        if t.stage == Stage::Hegemon {
-            let (l, c) = (10.0, t.gold);
+        if t.brackets > 0.0 {
+            let (l, c) = (10.0, alpha(t.gold, t.brackets));
             for (cx, cy, dx, dy) in [(r.x + 1.0, r.y + 1.0, 1.0, 1.0), (r.x + r.w - 1.0, r.y + 1.0, -1.0, 1.0), (r.x + 1.0, r.y + r.h - 1.0, 1.0, -1.0), (r.x + r.w - 1.0, r.y + r.h - 1.0, -1.0, -1.0)] {
                 draw_line(cx, cy, cx + l * dx, cy, 2.0, c);
                 draw_line(cx, cy, cx, cy + l * dy, 2.0, c);

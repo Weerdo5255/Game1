@@ -146,7 +146,19 @@ impl MapView {
                 y += 43.0;
             }
         }
-        self.regions(ui, game);
+        if t.trim > 0.0 {
+            // Stage 6: a slow rotating halo behind the whole map.
+            let c = self.to_screen(FULL_VIEW.1.x as f64, FULL_VIEW.1.y as f64);
+            let rot = ui.time as f32 * 0.12;
+            draw_circle(c.x, c.y, 250.0, alpha(t.gold, 0.035 * t.trim));
+            dashed_circle(c, 250.0, 36, rot, 2.0, alpha(t.gold, 0.3 * t.trim));
+            dashed_circle(c, 268.0, 12, -rot * 0.7, 3.0, alpha(t.gold, 0.2 * t.trim));
+            for i in 0..12 {
+                let d = dir(rot + i as f32 * TAU / 12.0);
+                draw_line(c.x + d.x * 276.0, c.y + d.y * 276.0, c.x + d.x * 300.0, c.y + d.y * 300.0, 2.0, alpha(t.gold, 0.22 * t.trim));
+            }
+        }
+        self.regions(ui, st, game);
         if t.stage >= Stage::Hegemon {
             let c = self.node_pos(CORE);
             let pulse = 1.0 + 0.06 * (ui.time as f32 * 0.8).sin();
@@ -166,13 +178,21 @@ impl MapView {
         }
     }
 
-    fn regions(&self, ui: &Ui, game: &Game) {
+    fn regions(&self, ui: &Ui, st: &UiState, game: &Game) {
         let t = ui.theme;
         for reg in REGIONS.iter() {
             let pts: Vec<Vec2> = reg.outline.iter().map(|&(x, y)| self.to_screen(x, y)).collect();
             let n = pts.len();
             let centroid = pts.iter().fold(Vec2::ZERO, |a, &p| a + p) / n as f32;
-            let fill = if game.region_ruled(reg.id) { lerp_color(t.land, t.teal, 0.2) } else { t.land };
+            // Ruled regions are washed teal; from Stage 4 any region with a node of ours takes a softer wash.
+            let held = st.plum_blend > 0.0 && NODES.iter().any(|d| d.region == reg.id && game.state().nodes[d.id.index()].owner == Owner::Player);
+            let fill = if game.region_ruled(reg.id) {
+                lerp_color(t.land, t.teal, 0.2)
+            } else if held {
+                lerp_color(t.land, t.teal, 0.08 * st.plum_blend)
+            } else {
+                t.land
+            };
             for i in 0..n {
                 draw_triangle(centroid, pts[i], pts[(i + 1) % n], fill);
             }

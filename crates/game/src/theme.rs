@@ -39,6 +39,9 @@ pub struct Theme {
     pub black: Color,
     pub factions: [Color; 3],
     pub rivals: [Color; 5],
+    /// 0..1: how far the Stage 5 gold corner brackets and the Stage 6 gold trim have faded in.
+    pub brackets: f32,
+    pub trim: f32,
 }
 
 impl Theme {
@@ -80,6 +83,8 @@ impl Theme {
             black: m(0x000000),
             factions: [m(0xF4E9CD), m(0xFFB347), m(0xE0564A)],
             rivals: [m(0x7BD957), m(0xC9CED6), m(0xFF6FB5), m(0x9B7BFF), m(0x5B8CFF)],
+            brackets: if stage == Stage::Hegemon { 1.0 } else { 0.0 },
+            trim: if stage == Stage::Sovereign { 1.0 } else { 0.0 },
         }
     }
     pub fn resource(&self, r: Resource) -> Color {

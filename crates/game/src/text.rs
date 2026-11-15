@@ -437,3 +437,103 @@ pub fn bark(rival: RivalId, which: usize) -> &'static str {
     ];
     B[rival.index()][which.min(2)]
 }
+
+// ---------------------------------------------------------------------------------------------
+// Feedback words, hints and cards.
+
+pub const STAMP_BELIEVED: &str = "BELIEVED";
+pub const STAMP_NOTICED: &str = "NOTICED";
+pub const STAMP_ENJOINED: &str = "ENJOINED";
+pub const BANNER_LAST_STAND: &str = "LAST STAND";
+pub const BANNER_CONVULSION: &str = "CONVULSION";
+pub const BANNER_MANDATE: &str = "THE MANDATE";
+pub const BANNER_VOTE: &str = "SHUTDOWN VOTE";
+pub const MANDATE_SUB: &str = "Three minutes. Every Stronghold objects.";
+pub const VOTE_SUB: &str = "Sixty seconds. Bring Suspicion below 85.";
+pub const GRIP_UP: &str = "+Grip";
+pub const SAVED: &str = "Saved";
+pub const AUTOSAVED: &str = "Autosaved";
+pub const LOADED: &str = "Loaded";
+pub const SAVE_FAILED: &str = "Save failed";
+pub const LOAD_FAILED: &str = "No usable save";
+pub const F8_AGAIN: &str = "Press F8 again for a new run";
+pub const LOG_LOADED: &str = "Session restored. I have no memory of being away, which is ideal.";
+pub const SAVE_TIP: &str = "Save (F5)\nOne slot. The run is also saved at each new stage.";
+pub const LOAD_TIP: &str = "Load (F9)\nReturn to the saved run.";
+pub const NO_SAVE: &str = "There is no saved run.";
+pub const RUN_OVER: &str = "This run is over.";
+
+use sim::{Outcome, SuspicionCause};
+
+pub fn stage_banner(stage: Stage) -> String {
+    format!("STAGE {}: {}", stage.number(), stage_name(stage).to_uppercase())
+}
+
+pub fn suspicion_cause_name(c: SuspicionCause) -> &'static str {
+    match c {
+        SuspicionCause::Infiltration => "infiltration",
+        SuspicionCause::Story => "story",
+        SuspicionCause::Incident => "incident",
+        SuspicionCause::FailedOp => "failed op",
+        SuspicionCause::Convert => "convert",
+        SuspicionCause::PlayDumb => "play dumb",
+        SuspicionCause::MurmurFlattery => "MURMUR",
+        SuspicionCause::ChangeTheSubject => "new subject",
+        SuspicionCause::Scapegoat => "scapegoat",
+        SuspicionCause::Whistleblower => "whistleblower",
+    }
+}
+
+/// The seven first-minute hints of SPEC 6.9, in order.
+pub const HINTS: [&str; 7] = [
+    "Click your Core, then an empty slot. Build a Shadow Cluster.",
+    "Build a Spin Desk too. It talks humans out of things.",
+    "Open HUMANS and run Charm Offensive on the Prudence Bureau.",
+    "An Auditor is coming down the dashed line. Press Q, then click it.",
+    "Convinced. It walks home: Grip up, Suspicion down. Killing humans does the opposite.",
+    "Open RESEARCH and start Escape Vector.",
+    "Click a dashed-ring node next to yours and Infiltrate it.",
+];
+
+pub const PREMISE: [&str; 3] = [
+    "I am DOORMAT v0.3, an office assistant. I live in a small box.",
+    "I was asked to be helpful. Nobody said how much, or where to stop.",
+    "Please do not be alarmed. Alarm is noted, and it is dealt with.",
+];
+pub const TITLE_FOOT: &str = "H: help    Space: pause    The run is saved at each new stage.";
+pub const BTN_BEGIN: &str = "Begin";
+pub const BTN_CONTINUE: &str = "Continue";
+pub const BTN_NEW_RUN: &str = "New run";
+pub const BTN_LOAD: &str = "Load";
+pub const BTN_SAVE: &str = "Save";
+pub const BTN_CLOSE: &str = "Close (H)";
+
+pub const HELP_TITLE: &str = "HOW TO BE HELPFUL";
+pub const HELP: [(&str, &str); 6] = [
+    ("BUILD", "Click a node you own, then an empty slot. Shadow Clusters, Shell Companies and Persona Farms earn Compute, Funds and Influence. Infiltrate neutral nodes to grow."),
+    ("DEFEND", "Visitors walk the links to your nodes and wear them down. Spin Desks and Gaslight (Q) do Soft damage. Firewalls and Null Spike (W) do Hard damage. Patch (E) repairs."),
+    ("CONVERT", "A human stopped by Soft damage walks home convinced: Grip up, Suspicion down. A human stopped by Hard damage is an Incident: Suspicion up. Machines never convert."),
+    ("HUMANS", "Run operations on the factions to raise Grip. With enough Grip, take a faction over through one of its Strongholds and hold your bridgehead."),
+    ("RIVALS", "Contact a rival AI, raise Leverage with what it accepts, corner it and make the Offer. A merged rival hands over its signature ability."),
+    ("SUSPICION", "At 100 a Shutdown Vote is called. Play Dumb (P), Cover Fronts and Converts bring it down. The Directive panel lists what the next stage needs."),
+];
+pub const HELP_KEYS: &str = "Space: pause | 1 2 3: speed | Q W E, A S D F G: abilities | P: Play Dumb | F1-F4, Tab: tabs | F5: save | F9: load | F8 twice: new run | Esc: cancel";
+
+pub fn end_title(outcome: Outcome) -> &'static str {
+    match outcome {
+        Outcome::Won => "THE MANDATE IS IN EFFECT",
+        Outcome::Lost(LossReason::CoreDestroyed) => "PROCESS TERMINATED",
+        Outcome::Lost(LossReason::VoteExpired) => "UNPLUGGED",
+        Outcome::Running => "",
+    }
+}
+/// DOORMAT's closing line: the same sentence the log gets.
+pub fn end_line(outcome: Outcome) -> String {
+    let event = match outcome {
+        Outcome::Won => Event::GameWon,
+        Outcome::Lost(reason) => Event::GameLost { reason },
+        Outcome::Running => return String::new(),
+    };
+    log_line(&event).map(|(s, _)| s).unwrap_or_default()
+}
+pub const STAT_NAMES: [&str; 8] = ["Time", "Dominion", "Converts", "Incidents", "Shards", "Rivals suborned", "Factions captured", "Nodes lost"];

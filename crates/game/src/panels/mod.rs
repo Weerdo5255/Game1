@@ -15,7 +15,7 @@ use crate::text;
 use crate::theme::alpha;
 use crate::ui::{Ui, DENSE, SMALL};
 use macroquad::prelude::*;
-use sim::{Action, ActionError, Game};
+use sim::{Action, ActionError, Game, Stage};
 
 /// Diagonal hatching clipped to a rectangle: the mark of a locked control.
 pub fn hatch(r: Rect, col: Color) {
@@ -65,6 +65,9 @@ pub fn act_frame(ui: &mut Ui, r: Rect, label: &str, sub: &str, tip: &str, res: &
     }
     let col = if enabled { t.text } else { alpha(t.dim, 0.85) };
     let label = fit(ui, label, DENSE, r.w - 8.0);
+    // Stage 1 stencils what the Institute has not signed off.
+    let stencil = t.stage == Stage::Boxed && r.h >= 34.0 && r.w >= 110.0 && matches!(res, Err(ActionError::StageLocked { .. }));
+    let sub = if stencil { text::NOT_AUTHORISED } else { sub };
     if sub.is_empty() {
         ui.text_in(&label, r, DENSE, col);
     } else {
