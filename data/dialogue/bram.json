@@ -9,6 +9,12 @@
         "Mind the grating, it is live on the left side. ...You are the auditor. Kowal. I keep the lights on.",
         "You want the short version? She is a forty-year-old tokamak running at {round(cond('reactor'))} percent on a containment coil I rewound by hand. She needs parts. I have asked for parts. I get forms."
       ],
+      "variants": [
+        {"if": "cond('reactor') >= 85", "text": [
+          "Mind the grating, it is live on the left side. ...You are the auditor. Kowal. I keep the lights on.",
+          "You picked a good day to count things. She is running at {round(cond('reactor'))} percent, and she has not done that since Marlow started sitting on the parts. It will not last. It never does."
+        ]}
+      ],
       "do": ["set_flag('met_bram')", "set_flag('inspected_eng')", "start_quest('q_reactor')"],
       "choices": [
         {"text": "Who is giving you forms?", "goto": "forms"},

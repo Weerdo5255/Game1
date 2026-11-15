@@ -95,6 +95,36 @@ def test_engineer_cannot_raid_the_quartermasters_stores(world):
     assert stores.count("spare_parts") < before
 
 
+def test_starving_crew_help_themselves_to_the_stores(world):
+    """Hungry people respect the quartermaster's shelves; starving people do not."""
+    items = world.content.items
+    world.systems.get("hydroponics").enabled = False
+
+    def strip_food(inventory):
+        for item_id in [i for i in inventory.items if "food" in items[i].tags]:
+            inventory.items.pop(item_id)
+    for obj in world.containers():
+        if obj.id != "stores_food":                 # the only food left is on Dex's restricted shelf
+            strip_food(world.inventory_of(obj))
+    for ch in world.characters.values():
+        strip_food(ch.inventory)
+        ch.needs["hunger"] = 0.0
+    dex = world.characters["dex"]                   # ...and he is not handing any of it out today
+    dex.goals = [g for g in dex.goals if g["id"] != "restock_galley"]
+    stores = world.inventory_of(world.find_object("stores_food"))
+    before = stores.count_tag(items, "food")
+    tuck = world.characters["tuck"]
+    tuck.needs["hunger"] = 70.0
+    run_hours(world, 2)
+    assert stores.count_tag(items, "food") == before, "merely hungry: he goes without"
+    assert tuck.wants and tuck.needs["hunger"] > 70
+    tuck.needs["hunger"] = 92.0
+    run_hours(world, 2.5)
+    assert stores.count_tag(items, "food") < before
+    assert tuck.needs["hunger"] < 85, "he ate what he took"
+    assert any("Tuck" in e["text"] and "without asking" in e["text"] for e in world.log)
+
+
 def test_reactor_gets_refuelled(world):
     reactor = world.systems.get("reactor")
     reactor.fuel_left = 2.0

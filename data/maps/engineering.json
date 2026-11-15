@@ -87,10 +87,10 @@
     {"id": "reactor_console", "type": "console", "x": 6, "y": 10, "system": "reactor", "name": "Reactor control"},
     {"id": "grid_console", "type": "console", "x": 26, "y": 5, "system": "grid", "name": "Power distribution board"},
     {"id": "reactor_hopper", "type": "container", "x": 9, "y": 10, "name": "Reactor fuel hopper", "machine": true, "owner": "engineering", "restricted": true, "items": {"fuel_cell": 1}},
-    {"id": "parts_locker", "type": "container", "x": 16, "y": 1, "name": "Parts locker", "owner": "engineering", "restricted": true, "items": {"spare_parts": 2}},
+    {"id": "parts_locker", "type": "container", "x": 16, "y": 1, "name": "Parts locker", "owner": "engineering", "restricted": true, "items": {}},
     {"id": "fab_feed", "type": "container", "x": 18, "y": 1, "name": "Fabricator feed bin", "machine": true, "owner": "engineering", "restricted": true, "items": {"scrap_metal": 4}},
     {"id": "tool_locker", "type": "container", "x": 27, "y": 13, "name": "Tool locker", "owner": "engineering", "restricted": true, "items": {"diag_scanner": 1, "scrap_metal": 2}},
-    {"id": "eng_locker", "type": "container", "x": 29, "y": 13, "name": "Engineering locker", "owner": "engineering", "restricted": true, "locked": true, "access": "engineering", "lock_level": 14, "items": {"keycard_eng": 1, "spare_parts": 1}},
+    {"id": "eng_locker", "type": "container", "x": 29, "y": 13, "name": "Engineering locker", "owner": "engineering", "restricted": true, "locked": true, "access": "engineering", "lock_level": 14, "items": {"keycard_eng": 1}},
     {"id": "reactor_sign", "type": "sign", "x": 6, "y": 8, "text": "The containment vessel hums a note you feel in your teeth. Someone has chalked a tally on the casing: days since last scram. The number has been rubbed out and rewritten many times."}
   ],
   "regions": [

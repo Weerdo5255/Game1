@@ -2,6 +2,7 @@
 
     python -m game.tools.validate          # errors and warnings for ./data
     python -m game.tools.validate --api    # list every script function
+    python -m game.tools.validate --api-md > docs/SCRIPT_API.md
     python -m game.tools.validate --data path/to/other/data
 
 It catches the things that are tedious to find by playing: a ``goto`` to a
@@ -680,43 +681,108 @@ def validate(content) -> Report:
     return Validator(content).run()
 
 
-def print_api() -> None:
+API_TITLES = {"cond": "CONDITIONS / GETTERS (use in 'if')", "text": "TEXT (use inside {braces})",
+              "effect": "EFFECTS (use in 'do')"}
+API_FOOTER = ("Also available: min, max, abs, round, int, float, str, len, bool, and/or/not, "
+              "comparisons, arithmetic, 'x if cond else y'.",
+              "Context names: npc, self, obj, item, map, player.")
+
+
+def api_reference() -> Dict[str, List[Tuple[str, str, str]]]:
+    """Every script function as ``{kind: [(name, signature, description)]}``,
+    read straight from :class:`~game.story.api.ScriptAPI`."""
+    import inspect
+
     from game.story.api import ScriptAPI
     from game.story.script import ScriptEngine
-    import inspect
     engine = ScriptEngine()
-    api = ScriptAPI(None)
-    engine.register_object(api)
-    groups: Dict[str, List[str]] = {"cond": [], "text": [], "effect": []}
+    engine.register_object(ScriptAPI(None))
+    groups: Dict[str, List[Tuple[str, str, str]]] = {"cond": [], "text": [], "effect": []}
     for name in sorted(engine.funcs):
         fn = engine.funcs[name]
-        kind = engine.kinds.get(name, "effect")
         if not hasattr(fn, "__script_kind__"):
             continue
-        sig = str(inspect.signature(fn))
-        doc = " ".join((fn.__doc__ or "").split())
-        groups.setdefault(kind, []).append("  %s%s\n      %s" % (name, sig, doc))
-    titles = {"cond": "CONDITIONS / GETTERS (use in 'if')", "text": "TEXT (use inside {braces})",
-              "effect": "EFFECTS (use in 'do')"}
+        kind = engine.kinds.get(name, "effect")
+        groups.setdefault(kind, []).append((name, str(inspect.signature(fn)), " ".join((fn.__doc__ or "").split())))
+    return groups
+
+
+def print_api() -> None:
+    groups = api_reference()
     for kind in ("cond", "text", "effect"):
-        print(titles[kind])
-        print("\n".join(groups[kind]))
+        print(API_TITLES[kind])
+        for name, sig, doc in groups[kind]:
+            print("  %s%s\n      %s" % (name, sig, doc))
         print()
-    print("Also available: min, max, abs, round, int, float, str, len, bool, and/or/not, "
-          "comparisons, arithmetic, 'x if cond else y'.")
-    print("Context names: npc, self, obj, item, map, player.")
+    for line in API_FOOTER:
+        print(line)
+
+
+def api_markdown() -> str:
+    """The script reference as a Markdown document (``docs/SCRIPT_API.md``)."""
+    groups = api_reference()
+    total = sum(len(v) for v in groups.values())
+    out = [
+        "# Script function reference",
+        "",
+        "<!-- Generated file: python -m game.tools.validate --api-md > docs/SCRIPT_API.md -->",
+        "",
+        "Every function that content files can call (%d in all). This page is generated from" % total,
+        "`game/story/api.py`; regenerate it after adding a function:",
+        "",
+        "    python -m game.tools.validate --api-md > docs/SCRIPT_API.md",
+        "",
+        "Scripts are small Python-looking expressions and statements stored as strings in the JSON",
+        "content: `if` fields take one expression, `do` fields take a list of statements, and text",
+        "may embed expressions in `{braces}`. See [AUTHORING.md](AUTHORING.md#the-script-language)",
+        "for the language itself.",
+        "",
+        "`who` is always a character id such as `'bram'` or `'player'`. When it is left out:",
+        "",
+        "* health, need and status-effect functions (`hp`, `need`, `heal`, `add_effect` ...) mean",
+        "  *whoever is using the item*, otherwise the player;",
+        "* inventory, money, skill, attribute and access functions (`has_item`, `credits`, `skill`,",
+        "  `roll`, `give_access` ...) mean *the player*;",
+        "* relationship, morale, name, goal and activity functions (`rel`, `add_rel`, `name`, `wants`,",
+        "  `activity`, `say` ...) mean *the NPC the script belongs to* - the person being talked to or",
+        "  the owner of the goal.",
+        "",
+    ]
+    sections = (("cond", "Conditions and getters", "Use these in `if` fields and inside other expressions."),
+                ("text", "Text helpers", "Return text; meant for `{braces}` inside dialogue and messages."),
+                ("effect", "Effects", "Change the world; use them in `do` lists."))
+    for kind, title, blurb in sections:
+        out += ["## %s" % title, "", blurb, "", "| Function | What it does |", "|---|---|"]
+        for name, sig, doc in groups[kind]:
+            out.append("| `%s%s` | %s |" % (name, sig, doc.replace("|", "\\|")))
+        out.append("")
+    out += ["## Also available", "",
+            "`min`, `max`, `abs`, `round`, `int`, `float`, `str`, `len`, `bool`, `and` / `or` / `not`,",
+            "comparisons (including chained ones and `in`), arithmetic, and `x if cond else y`.",
+            "",
+            "Context names: `npc` / `self` (the NPC the script belongs to), `obj` (the map object),",
+            "`item`, `map` and `player` - each is an id string that can be passed to the functions above.",
+            ""]
+    return "\n".join(out)
 
 
 def main(argv=None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    if "--api" in argv:
+    import argparse
+    parser = argparse.ArgumentParser(prog="python -m game.tools.validate",
+                                     description="Check every content file for mistakes.")
+    parser.add_argument("--data", default=None, help="content directory (default: ./data)")
+    parser.add_argument("--api", action="store_true", help="list every script function and exit")
+    parser.add_argument("--api-md", action="store_true",
+                        help="print the script reference as Markdown (docs/SCRIPT_API.md) and exit")
+    opts = parser.parse_args(argv)
+    if opts.api:
         print_api()
         return 0
-    data_dir = None
-    if "--data" in argv:
-        data_dir = argv[argv.index("--data") + 1]
+    if opts.api_md:
+        print(api_markdown())
+        return 0
     from game.content import Content
-    content = Content.load(data_dir)
+    content = Content.load(opts.data)
     report = validate(content)
     for line in report.errors:
         print("ERROR  ", line)

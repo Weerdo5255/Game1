@@ -84,8 +84,11 @@ def dump_props(path: str, scale: int = 3) -> None:
 
 
 def main(argv=None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    out = argv[0] if argv else "."
+    import argparse
+    parser = argparse.ArgumentParser(prog="python -m game.tools.artdump",
+                                     description="Write contact sheets of every tile, prop, sprite and icon.")
+    parser.add_argument("out", nargs="?", default="art_dump", help="output directory (default: ./art_dump)")
+    out = parser.parse_args(argv).out
     os.makedirs(out, exist_ok=True)
     dump_tiles(os.path.join(out, "tiles.png"))
     dump_props(os.path.join(out, "props.png"))

@@ -300,16 +300,16 @@ def build_all() -> Dict[str, GameMap]:
     m.obj("spawn", "4", id="player_start", name="player_start", facing="up")
     m.obj("interact", "5", id="airlock", name="Main airlock", dialogue="airlock")
     m.obj("marker", "6", id="patrol_hangar", name="patrol_hangar")
-    m.obj("container", ("S", 0), id="stores_food", name="Stores: provisions", owner="dex", restricted=True,
+    m.obj("container", ("S", 0), id="stores_food", name="Provisions shelf", owner="dex", restricted=True,
           items={"ration_pack": 14, "nutrient_paste": 10, "coffee_bulb": 4})
-    m.obj("container", ("S", 1), id="stores_parts", name="Stores: hardware", owner="dex", restricted=True,
+    m.obj("container", ("S", 1), id="stores_parts", name="Hardware shelf", owner="dex", restricted=True,
           items={"spare_parts": 3, "scrap_metal": 8})
     m.obj("container", ("L", 0), id="stores_fuel", name="Fuel locker", owner="dex", restricted=True,
           locked=True, access="engineering,stores", lock_level=13, items={"fuel_cell": 4})
     m.obj("container", ("L", 1), id="dex_locker", name="Quartermaster's locker", owner="dex", restricted=True,
           locked=True, key="dex_key", lock_level=15,
           items={"spare_parts": 4, "stim": 3, "pump_seal": 1, "cargo_manifest": 1, "synth_whiskey": 2})
-    m.obj("container", ("S", 2), id="stores_misc", name="Stores: sundries", owner="dex", restricted=True,
+    m.obj("container", ("S", 2), id="stores_misc", name="Sundries shelf", owner="dex", restricted=True,
           items={"medkit": 1, "thermal_suit": 1, "scrap_metal": 3})
     m.obj("container", ("U", 0), id="shuttle_hold", dx=1, name="Magpie cargo hatch", owner="dex", restricted=True,
           locked=True, key="magpie_key", lock_level=18, machine=True, items={})
@@ -503,14 +503,15 @@ def build_all() -> Dict[str, GameMap]:
     m.obj("console", ("a", 0), id="grid_console", system="grid", name="Power distribution board")
     m.obj("container", ("c", 0), id="reactor_hopper", name="Reactor fuel hopper", machine=True,
           owner="engineering", restricted=True, items={"fuel_cell": 1})
+    # engineering starts with empty shelves: every spare on the station is in the quartermaster's hands
     m.obj("container", ("L", 0), id="parts_locker", name="Parts locker", owner="engineering", restricted=True,
-          items={"spare_parts": 2})
+          items={})
     m.obj("container", ("S", 0), id="fab_feed", name="Fabricator feed bin", machine=True,
           owner="engineering", restricted=True, items={"scrap_metal": 4})
     m.obj("container", ("L", 1), id="tool_locker", name="Tool locker", owner="engineering", restricted=True,
           items={"diag_scanner": 1, "scrap_metal": 2})
     m.obj("container", ("L", 2), id="eng_locker", name="Engineering locker", owner="engineering", restricted=True,
-          locked=True, access="engineering", lock_level=14, items={"keycard_eng": 1, "spare_parts": 1})
+          locked=True, access="engineering", lock_level=14, items={"keycard_eng": 1})
     m.obj("sign", ("R", 0), id="reactor_sign", dx=1, text="The containment vessel hums a note you feel in your teeth. Someone has chalked a tally on the casing: days since last scram. The number has been rubbed out and rewritten many times.")
     m.region("reactor_hall", "Reactor Hall", 1, 1, 12, 14)
     m.region("workshop", "Workshop", 14, 1, 17, 14)
@@ -693,9 +694,17 @@ def build_all() -> Dict[str, GameMap]:
 
 
 def main(argv=None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    force = "--force" in argv
-    out_dir = os.path.join(config.data_dir(), "maps")
+    import argparse
+    parser = argparse.ArgumentParser(
+        prog="python -m game.tools.seed_maps",
+        description="Rebuild the shipped station maps from the layouts in this file. "
+                    "Existing map files are kept unless --force is given.")
+    parser.add_argument("--force", action="store_true",
+                        help="overwrite existing maps (hand edits made in the map editor are lost)")
+    parser.add_argument("--data", default=None, help="content directory (default: ./data)")
+    opts = parser.parse_args(argv)
+    force = opts.force
+    out_dir = os.path.join(opts.data or config.data_dir(), "maps")
     os.makedirs(out_dir, exist_ok=True)
     written = 0
     for map_id, gmap in build_all().items():

@@ -1,23 +1,25 @@
 """Render maps to PNG files (documentation, quick visual checks).
 
-    python -m game.tools.mapshot [out_dir] [map_id ...] [--regions] [--scale N]
+    python -m game.tools.mapshot                    # every map -> ./map_shots
+    python -m game.tools.mapshot shots hub hangar   # two maps -> ./shots
+    python -m game.tools.mapshot --regions --scale 3
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 
 
 def main(argv=None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    regions = "--regions" in argv
-    scale = 2
-    if "--scale" in argv:
-        i = argv.index("--scale")
-        scale = int(argv[i + 1])
-        del argv[i:i + 2]
-    args = [a for a in argv if not a.startswith("--")]
-    out = args[0] if args else "."
+    parser = argparse.ArgumentParser(prog="python -m game.tools.mapshot", description="Render maps to PNG files.")
+    parser.add_argument("out", nargs="?", default="map_shots", help="output directory (default: ./map_shots)")
+    parser.add_argument("maps", nargs="*", help="map ids (default: every map)")
+    parser.add_argument("--regions", action="store_true", help="outline regions and objects")
+    parser.add_argument("--scale", type=int, default=2, help="pixel scale of the picture (default 2)")
+    parser.add_argument("--data", default=None, help="content directory (default: ./data)")
+    opts = parser.parse_args(argv)
+    regions, scale, out = opts.regions, max(1, opts.scale), opts.out
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
     import pygame
@@ -31,11 +33,11 @@ def main(argv=None) -> int:
     from game.engine.font import get_font
     from game.scenes.render import MapRenderer
 
-    content = Content.load()
+    content = Content.load(opts.data)
     renderer = MapRenderer(TileArt(), CharArt(), IconArt())
     font = get_font(1)
     os.makedirs(out, exist_ok=True)
-    wanted = args[1:] or content.map_ids
+    wanted = opts.maps or content.map_ids
     for map_id in wanted:
         gmap = content.load_map(map_id)
         if gmap is None:

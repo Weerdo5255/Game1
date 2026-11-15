@@ -303,3 +303,24 @@ def test_character_creator_window(data_copy):
     from tests.helpers import talk
     w.script.strict = True
     assert talk(w, "odile")
+
+
+@pytest.mark.parametrize("module", ["validate", "mapshot", "artdump", "seed_maps", "simulate", "char_editor"])
+def test_tools_explain_themselves_without_side_effects(module, tmp_path, monkeypatch, capsys):
+    import importlib
+    monkeypatch.chdir(tmp_path)
+    tool = importlib.import_module("game.tools." + module)
+    with pytest.raises(SystemExit) as stop:
+        tool.main(["--help"])
+    assert stop.value.code == 0
+    assert "usage" in capsys.readouterr().out.lower()
+    assert os.listdir(tmp_path) == [], "asking for help must not write files"
+
+
+def test_script_reference_document_is_current():
+    """docs/SCRIPT_API.md is generated from the script functions; after
+    changing them run:  python -m game.tools.validate --api-md > docs/SCRIPT_API.md"""
+    from game import config
+    from game.tools.validate import api_markdown
+    with open(os.path.join(config.ROOT, "docs", "SCRIPT_API.md"), encoding="utf-8") as fh:
+        assert fh.read().strip() == api_markdown().strip()

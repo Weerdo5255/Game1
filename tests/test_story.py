@@ -108,6 +108,29 @@ def test_reactor_quest_by_opening_the_stores(world):
     assert world.player.inventory.has("tool_belt")
 
 
+def test_the_reactor_does_not_fix_itself(world):
+    """Engineering starts with empty shelves, so the quest waits for the player."""
+    brief(world)
+    talk(world, "bram", ["Who is giving you forms"])
+    assert world.quests.stage("q_reactor") == "parts"
+    wait_until(world, 2, 8)
+    reactor = world.systems.get("reactor")
+    assert reactor.condition < 60 and world.quests.status("q_reactor") == "active"
+    assert world.characters["bram"].wants.get("spare_parts")
+    assert world.systems.brownout
+    # one signature later the chief has what he needs
+    talk(world, "osei", ["I need the stores opened"])
+    wait_until(world, 2, 20)
+    assert world.quests.status("q_reactor") == "done" and reactor.condition > 75
+
+
+def test_bram_notices_a_reactor_that_is_already_healthy(world):
+    world.systems.get("reactor").condition = 95.0
+    lines = talk(world, "bram")
+    assert any("good day to count things" in line for line in lines)
+    assert not any("She needs parts" in line for line in lines)
+
+
 def test_fitting_parts_yourself_moves_the_reactor_quest_on(world):
     talk(world, "bram")
     assert world.quests.stage("q_reactor") == "parts"
@@ -272,6 +295,7 @@ def test_comms_branch_uncovers_the_real_orders_and_clause_nine(world):
     assert world.systems.get("comms").power_ratio < 0.1 and any("starved" in line for line in lines)
     assert world.quests.stage("q_comms") == "power"
     world.systems.get("comms").priority = 1
+    world.systems.get("reactor").condition = 90.0      # undo the sabotage: this test is not about famine
     world.systems.tick(world, 1e-6)
     assert world.script.eval("online('comms')")
     talk(world, "terminal_traffic", ["Read it.", "Send a distress call"])

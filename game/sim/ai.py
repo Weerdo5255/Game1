@@ -46,6 +46,7 @@ HYSTERESIS = 8.0           # bonus for the goal already being pursued
 SLEEP_HOLD = 25.0          # extra stickiness while asleep
 REPAIR_THRESHOLD = 65.0
 JURY_CAP = 45.0            # without parts a system can only be patched up to this
+DESPERATE_HUNGER = 85.0    # starving people stop asking whose shelf the food is on
 PART_WORK_HOURS = 0.5      # time to fit one spare part
 
 HANDLERS: Dict[str, Callable] = {}
@@ -593,16 +594,27 @@ def _container_ok(world, npc, obj, spec: dict) -> bool:
         return False
     if not can_open(npc, obj):
         return False
-    if obj.get("restricted"):
-        owner = str(obj.get("owner") or "")
-        if owner and owner not in (npc.id, npc.faction, npc.role) and not spec.get("steal") \
-                and "thief" not in npc.traits:
-            # not theirs: allowed only if they hold one of its access groups
-            groups = obj.access_groups()
-            mine = npc.access_groups()
-            if not any(g in mine for g in groups):
-                return False
+    if obj.get("restricted") and not has_claim(npc, obj):
+        # not theirs: only thieves and the desperate help themselves
+        if not (spec.get("steal") or "thief" in npc.traits or _desperate(npc, spec)):
+            return False
     return True
+
+
+def has_claim(npc, obj) -> bool:
+    """True if a restricted container is this character's to use: they (or
+    their department) own it, or they hold one of its access groups."""
+    owner = str(obj.get("owner") or "")
+    if not owner or owner in (npc.id, npc.faction, npc.role):
+        return True
+    mine = npc.access_groups()
+    return any(g in mine for g in obj.access_groups())
+
+
+def _desperate(npc, spec: dict) -> bool:
+    """Hunger beats paperwork: the starving take food wherever it is not
+    actually locked away."""
+    return spec.get("tag") == "food" and npc.needs.get("hunger", 0.0) >= DESPERATE_HUNGER
 
 
 def find_source(world, npc, spec: dict):
@@ -668,6 +680,11 @@ def _step_acquire(world, npc, goal, spec, state, dt):
         moved = inv.transfer(npc.inventory, taken_id, need)
         if moved:
             world.events.emit("npc_took:" + npc.id, npc=npc.id, item=taken_id, count=moved, container=src.id)
+            if src.get("restricted") and not has_claim(npc, src) and not spec.get("steal") \
+                    and "thief" not in npc.traits:
+                world.add_log("%s took %s from the %s without asking." % (
+                    npc.name, world.item_name(taken_id).lower(), src.name.lower()), "crew")
+                world.events.emit("npc_raid:" + src.id, npc=npc.id, item=taken_id, container=src.id)
     state["src"] = None
     return RUNNING
 

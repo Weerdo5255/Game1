@@ -16,3 +16,7 @@ saves/*
 *.bak
 .DS_Store
 Thumbs.db
+
+# output of the art / map dump tools
+art_dump/
+map_shots/
