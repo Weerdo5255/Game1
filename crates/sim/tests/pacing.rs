@@ -1,6 +1,6 @@
 //! Long-run acceptance tests of SPEC 7.2, driven by the scripted bots. Release only:
 //! `cargo test -p sim --release`.
-use sim::bot::{run_bot, Bot, BotKind, BotRun};
+use sim::bot::{run_bot, run_handicapped, Bot, BotKind, BotRun, Handicap};
 use sim::content::TUNING;
 use sim::save::{load_from_string, save_to_string};
 use sim::*;
@@ -46,6 +46,41 @@ fn steward_wins_in_window() {
     for r in runs.iter().filter(|r| r.outcome == Outcome::Won) {
         assert!(r.stage_ticks[1..].windows(2).all(|w| w[0] < w[1]), "stages in order: {r:?}");
     }
+}
+
+/// Wins of 20 seeds inside 75 minutes for a Steward that takes a turn every `period_ticks`.
+fn slower_wins(period_ticks: u64, burst: u32) -> usize {
+    let handicap = Handicap { period_ticks, burst, ..Handicap::default() };
+    (1..=20).filter(|&seed| run_handicapped(seed, BotKind::Steward, handicap, TUNING.pace, 75).outcome == Outcome::Won).count()
+}
+
+// Regression guards two wins under the measured 19 and 18 of 20: the game must stay winnable
+// for a player who looks at the map every 5 or 10 seconds instead of every second.
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn casual_player_wins() {
+    let wins = slower_wins(50, 6);
+    assert!(wins >= 17, "a turn every 5 s, up to 6 actions: {wins} of 20 won");
+}
+
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn slow_player_wins() {
+    let wins = slower_wins(100, 8);
+    assert!(wins >= 16, "a turn every 10 s, up to 8 actions: {wins} of 20 won");
+}
+
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn default_handicap_is_the_plain_bot() {
+    let plain = run_bot(5, BotKind::Steward, TUNING.pace, 20);
+    assert_eq!(plain, run_handicapped(5, BotKind::Steward, Handicap::default(), TUNING.pace, 20));
+    let mut g = Game::with_pace(5, TUNING.pace);
+    let mut bot = Bot::new(BotKind::Steward);
+    while g.state().outcome == Outcome::Running && g.state().tick < 20 * MIN {
+        step(&mut g, &mut bot);
+    }
+    assert_eq!(g.state_hash(), plain.hash);
 }
 
 #[test]

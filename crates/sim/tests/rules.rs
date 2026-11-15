@@ -213,7 +213,7 @@ fn formulas() {
     let c = g.income_breakdown(Resource::Compute);
     assert_eq!((c.base, c.buildings, c.ruled_bonus, c.bonus_pct, c.penalty_mult, c.total), (1.5, 4.5, 0.0, 0.0, 1.0, 6.0));
     assert_eq!(g.building_output(NodeId(1), 0), Some((Resource::Compute, 1.5)));
-    assert_eq!(g.defence_dps(NodeId(3), 0), 22.5);
+    assert_eq!(g.defence_dps(NodeId(3), 0), 30.0);
     assert_eq!(g.defence_range(NodeId(3), 0), 80.0);
     assert_eq!(g.op_cost(OpKind::CharmOffensive).influence, 24.0);
     let rate = g.suspicion_rate();

@@ -1,5 +1,6 @@
-//! cargo run -p sim --release --example pacing -- <steward|idle|nodefence|glutton> [first_seed] [last_seed] [pace] [max_minutes] [-v]
-use sim::bot::{Bot, BotKind};
+//! cargo run -p sim --release --example pacing -- <steward|idle|nodefence|glutton> [first_seed] [last_seed] [pace] [max_minutes] [period_ticks] [burst] [noattack] [nopatch] [novent] [noops] [-v]
+//! The trailing handicap arguments simulate a slower or sloppier player (defaults 10 and 2: the bot as specified).
+use sim::bot::{Bot, BotKind, Handicap};
 use sim::content::TUNING;
 use sim::{Band, Event, Game, Outcome};
 
@@ -15,7 +16,9 @@ fn median(mut v: Vec<u64>) -> Option<u64> {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let verbose = args.iter().any(|a| a == "-v");
-    let args: Vec<&String> = args.iter().filter(|a| *a != "-v").collect();
+    let flag = |name: &str| args.iter().any(|a| a == name);
+    let flags = ["-v", "noattack", "nopatch", "novent", "noops"];
+    let args: Vec<&String> = args.iter().filter(|a| !flags.contains(&a.as_str())).collect();
     let kind = match args.first().map(|s| s.as_str()).unwrap_or("steward") {
         "idle" => BotKind::Idle,
         "nodefence" => BotKind::NoDefence,
@@ -26,27 +29,33 @@ fn main() {
     let (first, last) = (num(1, 1.0) as u64, num(2, 20.0) as u64);
     let pace = num(3, TUNING.pace);
     let max_ticks = num(4, 70.0) as u64 * 600;
+    let handicap = Handicap {
+        period_ticks: num(5, 10.0) as u64,
+        burst: num(6, 2.0) as u32,
+        no_attack_abilities: flag("noattack"),
+        no_patch: flag("nopatch"),
+        no_vent: flag("novent"),
+        no_ops: flag("noops"),
+    };
 
     let mut ends = Vec::new();
     let mut wins = Vec::new();
+    let mut losses = 0;
     let mut stages: [Vec<u64>; 6] = Default::default();
     for seed in first..=last {
         let mut game = Game::with_pace(seed, pace);
-        let mut bot = Bot::new(kind);
+        let mut bot = Bot::with_handicap(kind, handicap);
         let (mut alarmed, mut manhunt, mut votes, mut min_core, mut mandate_at) = (0u64, 0u64, 0u32, 1.0f64, 0u64);
         let mut min_core_mandate = 1.0f64;
         let (mut curious, mut max_sus) = (0u64, 0.0f64);
         let (mut last_action, mut early_gap) = (0u64, 0u64);
         while game.state().outcome == Outcome::Running && game.state().tick < max_ticks {
-            if game.state().tick % 10 == 0 {
-                for action in bot.decide(&game) {
-                    let tick = game.state().tick;
-                    if tick <= 3600 {
-                        early_gap = early_gap.max(tick - last_action);
-                    }
-                    last_action = tick;
-                    let _ = game.apply(action);
+            let tick = game.state().tick;
+            if !bot.take_turn(&mut game).is_empty() {
+                if tick <= 3600 {
+                    early_gap = early_gap.max(tick - last_action);
                 }
+                last_action = tick;
             }
             game.tick();
             let events = game.drain_events();
@@ -153,6 +162,8 @@ fn main() {
         ends.push(s.tick);
         if s.outcome == Outcome::Won {
             wins.push(s.tick);
+        } else if s.outcome != Outcome::Running {
+            losses += 1;
         }
         for i in 1..6 {
             if s.stats.stage_ticks[i] > 0 {
@@ -164,10 +175,12 @@ fn main() {
     let n = ends.len();
     let st: Vec<String> = stages[1..].iter().map(|v| show(v.clone())).collect();
     println!(
-        "median: end {} | wins {}/{} median win {} | stages {} ",
+        "median: end {} | wins {}/{} losses {} still running {} median win {} | stages {} ",
         show(ends),
         wins.len(),
         n,
+        losses,
+        n - wins.len() - losses,
         show(wins.clone()),
         st.join(" ")
     );

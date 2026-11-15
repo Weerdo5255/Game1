@@ -11,6 +11,29 @@ plain_enum!(BotKind { Steward, Idle, NoDefence, Glutton });
 #[derive(Clone)]
 pub struct Bot {
     pub kind: BotKind,
+    pub handicap: Handicap,
+}
+
+/// A slower or sloppier hand on the same plan, for measuring how forgiving the balance is.
+/// The default is the bot as specified: a turn every second, at most two actions, nothing skipped.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Handicap {
+    /// Ticks between turns.
+    pub period_ticks: u64,
+    /// Most actions in one turn.
+    pub burst: u32,
+    /// Never uses Gaslight, Null Spike, Trending Topic, Lockdown or Stand Down.
+    pub no_attack_abilities: bool,
+    pub no_patch: bool,
+    /// Never plays dumb and never runs Scapegoat.
+    pub no_vent: bool,
+    pub no_ops: bool,
+}
+
+impl Default for Handicap {
+    fn default() -> Handicap {
+        Handicap { period_ticks: 10, burst: 2, no_attack_abilities: false, no_patch: false, no_vent: false, no_ops: false }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -79,7 +102,30 @@ fn ability(g: &Game, ability: AbilityId, target: AbilityTarget) -> Option<Action
 
 impl Bot {
     pub fn new(kind: BotKind) -> Bot {
-        Bot { kind }
+        Bot { kind, handicap: Handicap::default() }
+    }
+
+    pub fn with_handicap(kind: BotKind, handicap: Handicap) -> Bot {
+        Bot { kind, handicap }
+    }
+
+    /// Call every tick before `Game::tick`: on a turn tick, decides and applies up to `burst` actions.
+    pub fn take_turn(&mut self, game: &mut Game) -> Vec<Action> {
+        let mut done = Vec::new();
+        if game.state.tick % self.handicap.period_ticks.max(1) != 0 {
+            return done;
+        }
+        while (done.len() as u32) < self.handicap.burst {
+            let actions = self.decide(game);
+            if actions.is_empty() {
+                break;
+            }
+            for action in actions {
+                let _ = game.apply(action.clone());
+                done.push(action);
+            }
+        }
+        done
     }
 
     /// Call when `state.tick % 10 == 0`; returns 0..=2 actions.
@@ -135,8 +181,10 @@ impl Bot {
                 return Some(a);
             }
         }
-        if let Some(a) = self.operations(g) {
-            return Some(a);
+        if !self.handicap.no_ops {
+            if let Some(a) = self.operations(g) {
+                return Some(a);
+            }
         }
         if !waiting_mandate {
             if let Some(a) = infiltrate(g) {
@@ -148,7 +196,7 @@ impl Bot {
 
     fn emergencies(&self, g: &Game) -> Option<Action> {
         let s = &g.state;
-        if self.kind != BotKind::NoDefence {
+        if self.kind != BotKind::NoDefence && !self.handicap.no_patch {
             let frac = |n: usize| s.nodes[n].integrity / calc::node_max_integrity(s, NodeId(n as u8));
             let mut target = None;
             if frac(0) < 0.5 {
@@ -177,12 +225,12 @@ impl Bot {
                 return Some(a);
             }
         }
-        if s.suspicion >= 45.0 {
+        if s.suspicion >= 45.0 && !self.handicap.no_vent {
             if let Some(a) = ok(g, Action::PlayDumb) {
                 return Some(a);
             }
         }
-        if s.suspicion >= 60.0 {
+        if s.suspicion >= 60.0 && !self.handicap.no_vent {
             // RIVALS is in tier order
             for r in RIVALS.iter() {
                 if let Some(a) = ok(g, Action::StartOp { kind: OpKind::Scapegoat, target: OpTarget::Rival(r.id) }) {
@@ -195,6 +243,9 @@ impl Bot {
 
     fn abilities(&self, g: &Game) -> Option<Action> {
         let s = &g.state;
+        if self.handicap.no_attack_abilities {
+            return ability(g, AbilityId::FlashCrash, AbilityTarget::None);
+        }
         let live: Vec<&Unit> = s.units.iter().filter(|u| calc::unit_targetable(u)).collect();
         if live.is_empty() && !calc::ability_unlocked(s, AbilityId::FlashCrash) {
             return None;
@@ -462,15 +513,16 @@ pub struct BotRun {
 }
 
 pub fn run_bot(seed: u64, kind: BotKind, pace: f64, max_minutes: u32) -> BotRun {
+    run_handicapped(seed, kind, Handicap::default(), pace, max_minutes)
+}
+
+/// `run_bot` with a handicap; the default handicap gives the same run tick for tick.
+pub fn run_handicapped(seed: u64, kind: BotKind, handicap: Handicap, pace: f64, max_minutes: u32) -> BotRun {
     let mut game = Game::with_pace(seed, pace);
-    let mut bot = Bot::new(kind);
+    let mut bot = Bot::with_handicap(kind, handicap);
     let max_ticks = max_minutes as u64 * 600;
     while game.state.outcome == Outcome::Running && game.state.tick < max_ticks {
-        if game.state.tick % 10 == 0 {
-            for action in bot.decide(&game) {
-                let _ = game.apply(action);
-            }
-        }
+        bot.take_turn(&mut game);
         game.tick();
         if game.state.tick % 300 == 0 {
             game.events.clear();

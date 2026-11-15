@@ -10,6 +10,11 @@
 //! - Uprising waves (table 3.12), per entry Stronghold: waves 1-3 two -> three Response Teams; waves 4-6
 //!   two -> three Response Teams plus the Special Counsel; waves 7-8 one -> two Kill-Switch Convoys plus two
 //!   Response Teams. With the table as specified a level-3 home lane takes no Core damage at all.
+//! - Firewall and Spin Desk effect per level 6 / 15 / 36 -> 8 / 20 / 48 damage per second: with the lower row
+//!   built defences could not hold a lane without Gaslight on every cooldown, so only a player acting every
+//!   second won. Seeds 1 to 20, 75 minutes, wins before -> after: Steward 19 -> 20 (median win 35:46 -> 35:07),
+//!   a turn every 5 s with up to 6 actions 12 -> 19, every 10 s with up to 8 actions 7 -> 18, never using
+//!   Patch 9 -> 15. A player with no attack abilities still does not win (0 of 20; 19 still running at 75:00).
 use crate::state::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -706,7 +711,7 @@ pub static BUILDINGS: [BuildingDef; 7] = [
         kind: B::Firewall,
         name: "Firewall",
         base_price: 50.0,
-        effect: [6.0, 15.0, 36.0],
+        effect: [8.0, 20.0, 48.0],
         range: [70.0, 80.0, 90.0],
         produces: None,
         affinity: &[],
@@ -718,7 +723,7 @@ pub static BUILDINGS: [BuildingDef; 7] = [
         kind: B::SpinDesk,
         name: "Spin Desk",
         base_price: 50.0,
-        effect: [6.0, 15.0, 36.0],
+        effect: [8.0, 20.0, 48.0],
         range: [70.0, 80.0, 90.0],
         produces: None,
         affinity: &[],

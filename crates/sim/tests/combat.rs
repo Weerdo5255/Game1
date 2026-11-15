@@ -642,8 +642,8 @@ fn stacking() {
         (g.defence_dps(CORE, 0), g.defence_dps(CORE, 1))
     };
     let check = |got: (f64, f64), mult: f64| {
-        assert_approx(got.0, 6.0 * mult, "spin desk L1");
-        assert_approx(got.1, 36.0 * mult, "firewall L3");
+        assert_approx(got.0, 8.0 * mult, "spin desk L1");
+        assert_approx(got.1, 48.0 * mult, "firewall L3");
     };
     check(dps(&[], false, false), 1.0);
     check(dps(&[TechId::S3], false, false), 1.25);
@@ -821,7 +821,7 @@ fn injunction() {
     // Core 1.0 + Pallwick Exchange 0.5 + a Shell Company with affinity 1.5
     assert_approx(g.income().funds, 3.0, "funds before");
     assert_approx(g.suspicion_rate().cover, 0.5, "cover front before");
-    assert_eq!(g.defence_dps(NodeId(3), 1), 6.0);
+    assert_eq!(g.defence_dps(NodeId(3), 1), 8.0);
     let events = run(&mut g, 1);
     assert!(events.iter().any(|(_, e)| *e == Event::InjunctionServed { node: NodeId(3) }), "{events:?}");
     assert!(g.state().nodes[3].injunction);
