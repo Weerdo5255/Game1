@@ -443,6 +443,16 @@ class ScriptAPI:
         npc.ai["think"] = 0.0
 
     @script_fn()
+    def set_home(self, who, bed=""):
+        """Give an NPC a different bed to sleep in ('' = none)."""
+        npc = self._char(who)
+        if bed:
+            self._object(bed)
+            npc.home = {"bed": bed}
+        else:
+            npc.home = {}
+
+    @script_fn()
     def set_maintain(self, who, *systems):
         """Make an NPC responsible for repairing the listed systems."""
         npc = self._char(who)

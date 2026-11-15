@@ -71,6 +71,18 @@ def relation_label(value: float) -> str:
     return "Devoted"
 
 
+def _key_to_json(key):
+    if not key:
+        return None
+    return [key[0], [list(c) for c in key[1]]]
+
+
+def _key_from_json(data):
+    if not data:
+        return None
+    return (data[0], tuple((int(c[0]), int(c[1])) for c in data[1]))
+
+
 def clamp(v: float, lo: float, hi: float) -> float:
     return lo if v < lo else hi if v > hi else v
 
@@ -138,6 +150,7 @@ class Character:
         # not serialised
         self.content = None
         self.path: List[Tuple[int, int]] = []
+        self._path_key = None
         self._mods: Optional[Dict[str, float]] = None
         self.bark = ""                # speech bubble text
         self.bark_time = 0.0
@@ -455,6 +468,10 @@ class Character:
             "effects": [dict(e) for e in self.effects], "auto_effects": list(self.auto_effects),
             "inventory": self.inventory.to_dict(), "equipped": dict(self.equipped),
             "map": self.map_id, "x": self.x, "y": self.y, "facing": self.facing, "speed": self.speed,
+            # mid-step state, so a loaded game carries on exactly where it stopped
+            "move": [self.prev_x, self.prev_y, self.move_t, self.blocked_time],
+            "path": [list(c) for c in self.path],
+            "path_key": _key_to_json(getattr(self, "_path_key", None)),
             "relations": dict(self.relations), "met": self.met, "dialogue": self.dialogue,
             "alive": self.alive, "present": self.present, "flags": dict(self.flags),
             "traits": list(self.traits), "access": list(self.access),
@@ -485,6 +502,11 @@ class Character:
         ch.equipped = dict(data.get("equipped") or {})
         ch.place(str(data.get("map", "")), data.get("x", 0), data.get("y", 0), str(data.get("facing", "down")))
         ch.speed = float(data.get("speed", config.NPC_SPEED))
+        move = data.get("move")
+        if move and len(move) >= 4:
+            ch.prev_x, ch.prev_y, ch.move_t, ch.blocked_time = int(move[0]), int(move[1]), float(move[2]), float(move[3])
+        ch.path = [(int(c[0]), int(c[1])) for c in data.get("path") or []]
+        ch._path_key = _key_from_json(data.get("path_key"))
         ch.relations = {k: float(v) for k, v in (data.get("relations") or {}).items()}
         ch.met = bool(data.get("met", False))
         ch.alive = bool(data.get("alive", True))

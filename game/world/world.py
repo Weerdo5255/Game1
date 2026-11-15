@@ -603,6 +603,7 @@ class World:
             "log": self.log[-150:],
             "playtime": self.playtime,
             "ended": self.ended,
+            "slow": self._slow,
         }
 
     @classmethod
@@ -659,5 +660,6 @@ class World:
         world.log = list(data.get("log") or [])
         world.playtime = float(data.get("playtime", 0.0))
         world.ended = data.get("ended")
+        world._slow = float(data.get("slow", 0.0))
         world._sync_marks()
         return world

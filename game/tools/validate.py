@@ -56,6 +56,7 @@ REFS: Dict[str, List[Tuple[Any, str]]] = {
     "add_goal": [(0, "char"), (1, "goal")], "cancel_goal": [(0, "char")],
     "set_goal_priority": [(0, "char")], "set_schedule": [(0, "char"), (1, "schedule")],
     "set_dialogue": [(0, "char"), (1, "dialogue")], "set_maintain": [(0, "char")],
+    "set_home": [(0, "char"), (1, "object")],
     "move_npc": [(0, "char"), (1, "map")], "remove_npc": [(0, "char")], "set_met": [(0, "char")],
     "rel_between": [(0, "char"), (1, "char")], "add_rel_between": [(0, "char"), (1, "char")],
     "can_trade": [(0, "char")], "open_trade": [(0, "char")], "has_trait": [(1, "char")],

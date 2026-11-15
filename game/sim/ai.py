@@ -841,6 +841,15 @@ def _step_patrol(world, npc, goal, spec, state, dt):
 
 @step("wait")
 def _step_wait(world, npc, goal, spec, state, dt):
+    # a wait may name a place ("object", "region", "marker" ...): the NPC goes back
+    # there whenever something more urgent (a meal, sleep) has pulled them away
+    if any(k in spec for k in ("object", "region", "marker", "system", "char", "x")):
+        status, focus = _go(world, npc, spec, state)
+        if status == "moving":
+            npc.activity = "Walking"
+            return RUNNING
+        if status == "arrived" and focus:
+            npc.face_towards(*focus)
     if spec.get("until"):
         if world.script.eval(spec["until"], {"self": npc.id, "npc": npc.id}):
             return DONE

@@ -21,8 +21,7 @@
     "desc": "$label",
     "priority": 70,
     "steps": [
-      {"do": "goto", "object": "$marker"},
-      {"do": "wait", "until": "$until", "label": "$label"}
+      {"do": "wait", "object": "$marker", "until": "$until", "label": "$label"}
     ]
   },
   "confront_player": {
@@ -38,7 +37,7 @@
     "log": true,
     "steps": [
       {"do": "talk", "char": "$target", "minutes": 4, "line": "You're coming with me.", "optional": false},
-      {"do": "run", "script": ["move_npc('$target', 'command', 26, 14)", "set_schedule('$target', 'confined')", "set_flag('$flag')"]},
+      {"do": "run", "script": ["move_npc('$target', 'command', 26, 14)", "set_schedule('$target', 'confined')", "set_home('$target', 'brig_bunk')", "set_flag('$flag')"]},
       {"do": "goto", "object": "cell_door"},
       {"do": "run", "script": ["lock('cell_door')"]}
     ]
@@ -49,8 +48,7 @@
     "log": true,
     "steps": [
       {"do": "acquire", "item": "mining_charge", "count": 2, "steal": true},
-      {"do": "goto", "object": "chamber_trigger", "label": "Carrying charges into the tunnels"},
-      {"do": "wait", "minutes": 20, "label": "Setting charges"},
+      {"do": "wait", "object": "chamber_trigger", "minutes": 20, "label": "Setting charges"},
       {"do": "run", "script": ["emit('tunnel_blown')"]}
     ]
   },
@@ -72,8 +70,7 @@
     "priority": 92,
     "log": false,
     "steps": [
-      {"do": "goto", "object": "magpie", "label": "Heading for the hangar"},
-      {"do": "wait", "minutes": 25, "label": "Running pre-flight on the Magpie"},
+      {"do": "wait", "object": "magpie", "minutes": 25, "label": "Running pre-flight on the Magpie"},
       {"do": "run", "script": ["emit('magpie_launch')"]}
     ]
   }
