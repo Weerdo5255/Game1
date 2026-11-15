@@ -417,3 +417,47 @@ def test_authoring_tour(data_copy, capsys):
     assert world.quests.status("q_salvage") == "done"
     assert npc.opinion_of("player") >= 10
     assert world.script.errors == []
+
+
+def test_documentation_examples_are_valid():
+    """Every ```json block in the docs is real JSON, and every script inside
+    one uses the language and the functions that actually exist."""
+    import re
+
+    from game import config
+    from game.story.api import ScriptAPI
+    from game.story.script import ScriptEngine
+    engine = ScriptEngine()
+    engine.register_object(ScriptAPI(None))
+    conditions = ("if", "when", "while", "until", "cond")
+    statements = ("do", "on_complete", "on_fail", "on_enter", "on_interact", "use", "script", "effects")
+    problems, blocks = [], 0
+
+    def walk(node, where):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in conditions and isinstance(value, str):
+                    problems.extend("%s %s: %s" % (where, key, p) for p in engine.check(value))
+                elif key in statements:
+                    if isinstance(value, str) and re.fullmatch(r"[a-z_]+", value):
+                        continue                    # a goal step verb or schedule activity, not a script
+                    for line in ([value] if isinstance(value, str) else value):
+                        problems.extend("%s %s: %s" % (where, key, p) for p in engine.check(line, statement=True))
+                elif key == "text":
+                    for page in ([value] if isinstance(value, str) else value):
+                        problems.extend("%s text: %s" % (where, p) for p in engine.check_format(page))
+                walk(value, where)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value, where)
+
+    for name in ("README.md", os.path.join("docs", "AUTHORING.md")):
+        with open(os.path.join(config.ROOT, name), encoding="utf-8") as fh:
+            text = fh.read()
+        for block in re.findall(r"```json\n(.*?)```", text, re.S):
+            blocks += 1
+            try:
+                walk(json.loads(block), name)
+            except ValueError as exc:
+                problems.append("%s: not JSON (%s): %s" % (name, exc, block[:60]))
+    assert blocks >= 10 and problems == [], "\n".join(problems)

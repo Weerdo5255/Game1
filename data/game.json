@@ -4,7 +4,6 @@
   "premise": "Ithaca Station clings to the lip of a canyon on Saturn's moon Tethys: ten people, one tired reactor and a drill that has been biting into the ice for forty years. The Meridian Combine wants to know whether to keep paying for it.\n\nYou are the auditor they sent. The tug that dropped you comes back in five days. What your report says - and whether there is still a station to report on - is up to you.",
   "time_scale": 1.0,
   "start": {"map": "hangar", "spawn": "player_start", "day": 1, "hour": 7, "minute": 30},
-  "deadline": {"day": 6, "hour": 8},
   "intro": "intro",
   "mess_region": "mess_hall",
   "medbay_bed": "medbay_bed",
