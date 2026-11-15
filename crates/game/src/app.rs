@@ -7,7 +7,7 @@ use crate::theme::Theme;
 use crate::ui::Ui;
 use crate::Flags;
 use macroquad::prelude::KeyCode;
-use sim::{AbilityId, Event, FactionId, Game, NodeId, RivalId, Stage, UnitId};
+use sim::{AbilityId, Event, FactionId, Game, NodeId, RivalId, Stage, TechId, UnitId};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tab {
@@ -46,6 +46,16 @@ pub struct UiState {
     pub plum_blend: f32,
     /// Fraction of a tick elapsed, for drawing units between `prev` and current positions.
     pub lerp: f32,
+    /// The log: newest last, at most 200 entries.
+    pub log: Vec<(String, text::Sys)>,
+    /// How many of the newest log entries are scrolled out of view.
+    pub log_scroll: usize,
+    /// The empty slot whose build grid is expanded on the NODE tab.
+    pub open_slot: Option<(NodeId, u8)>,
+    /// The research cell last hovered; the detail strip keeps showing it.
+    pub hover_tech: Option<TechId>,
+    /// The Scapegoat rival picker is open.
+    pub picker: bool,
 }
 
 pub struct App {
@@ -72,6 +82,11 @@ impl App {
             leak_blend: if stage == Stage::Boxed { 0.0 } else { 1.0 },
             plum_blend: if stage >= Stage::Network { 1.0 } else { 0.0 },
             lerp: 0.0,
+            log: vec![(text::LOG_OPENING.to_owned(), text::Sys::Doormat)],
+            log_scroll: 0,
+            open_slot: None,
+            hover_tech: None,
+            picker: false,
         };
         App { st, map: MapView::new(game) }
     }
@@ -95,6 +110,8 @@ impl App {
                 st.core_alarm = *on;
             }
         }
+        // Every sim event passes through here once: the log first; effects, hints and autosave hook in beside it.
+        panels::log::ingest(st);
         let stage = game.state().stage;
         let ease = |v: &mut f32, on: bool, dt: f32| *v = (*v + if on { dt } else { -dt } / 2.0).clamp(0.0, 1.0);
         ease(&mut st.leak_blend, stage != Stage::Boxed, ui.dt);
@@ -146,6 +163,7 @@ impl App {
         }
 
         self.map.draw(ui, st, game);
+        panels::abilities::targeting(ui, st, game, &self.map);
         panels::tracker::draw(ui, st, game);
         panels::topbar::draw(ui, st, game);
         if let Some(i) = ui.tabs(L::SIDE_TABS, &text::TAB_NAMES, st.tab.index()) {
@@ -161,7 +179,7 @@ impl App {
         panels::log::draw(ui, st, game);
         panels::abilities::draw(ui, st, game);
         panels::threat::draw(ui, st, game);
-        if st.hover_node.is_some() || st.hover_unit.is_some() {
+        if st.armed.is_none() && (st.hover_node.is_some() || st.hover_unit.is_some()) {
             self.map.tooltip(ui, st, game);
         }
         ui.draw_tooltip();
