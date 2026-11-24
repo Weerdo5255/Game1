@@ -87,6 +87,9 @@ fn validate(s: &GameState) -> Result<(), &'static str> {
     if s.breach_failed.iter().any(|&n| !node_ok(n)) {
         return Err("failed breach node");
     }
+    if s.breach_cooldown > BREACH_COOLDOWN_MAX {
+        return Err("breach cooldown");
+    }
     if let Some(b) = &s.breach {
         breach_ok(s, b)?;
     }
@@ -97,6 +100,8 @@ const BREACH_HOSTS_MAX: usize = 32;
 const BREACH_STREAMS_MAX: usize = 256;
 const BREACH_PACKETS_MAX: usize = 4096;
 const BREACH_TRACE_MAX: u32 = 1200;
+/// Far above any cooldown the rules set, so a hand-edited save cannot shut the Breach away.
+const BREACH_COOLDOWN_MAX: u32 = 6000;
 
 /// A Breach the tick can run without stepping outside its board.
 fn breach_ok(s: &GameState, b: &BreachState) -> Result<(), &'static str> {

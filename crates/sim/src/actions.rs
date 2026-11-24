@@ -262,7 +262,8 @@ pub(crate) fn validate(s: &GameState, action: &Action) -> Check {
             if !commit.is_finite() || commit < min - BREACH_COMMIT_TOLERANCE || commit > max + BREACH_COMMIT_TOLERANCE {
                 return Err(E::BadCommit { min, max });
             }
-            afford(s, &Resources::new(commit, 0.0, calc::infiltration_cost(s, node).influence))
+            // what is paid is the commit brought inside its range, so that is what must be held
+            afford(s, &Resources::new(commit.max(min).min(max), 0.0, calc::infiltration_cost(s, node).influence))
         }
         Action::StartResearch { tech } => {
             let def = &TECHS[tech.index()];

@@ -478,8 +478,12 @@ fn start_validation_order() {
     for bad in [f64::NAN, f64::INFINITY, -1.0, 0.0, 39.98, 120.02, 1e9] {
         assert_eq!(g.can_apply(&start(7, bad)), Err(ActionError::BadCommit { min, max }), "{bad}");
     }
-    assert_eq!(g.can_apply(&start(7, 39.9921875)), Err(ActionError::NotEnough { resource: Resource::Compute, missing: 29.9921875 }));
-    assert_eq!(g.can_apply(&start(7, 120.0078125)), Err(ActionError::NotEnough { resource: Resource::Compute, missing: 110.0078125 }));
+    // inside the tolerance the commit counts as the bound, which is what would be paid
+    assert_eq!(g.can_apply(&start(7, 39.9921875)), Err(ActionError::NotEnough { resource: Resource::Compute, missing: 30.0 }));
+    assert_eq!(g.can_apply(&start(7, 120.0078125)), Err(ActionError::NotEnough { resource: Resource::Compute, missing: 110.0 }));
+    // so a player a hair short of the minimum is not let in to end up below zero
+    let short = edit(&g, |s| s.resources = Resources::new(39.9921875, 0.0, 100.0));
+    assert_eq!(short.can_apply(&start(7, 39.9921875)), Err(ActionError::NotEnough { resource: Resource::Compute, missing: 0.0078125 }));
     let g = edit(&g, |s| s.resources.compute = 500.0);
     assert_eq!(g.can_apply(&start(7, 60.0)), Err(ActionError::NotEnough { resource: Resource::Influence, missing: 7.0 }));
     assert_eq!(g.breach_startable(NodeId(7)), Err(ActionError::NotEnough { resource: Resource::Influence, missing: 7.0 }));
@@ -1134,6 +1138,7 @@ fn saves_with_a_broken_breach_are_rejected() {
         ("attempts out of range", Box::new(|s, _| s.breach_attempts = u32::MAX)),
         ("failed node out of range", Box::new(|s, _| { s.breach_failed.insert(NodeId(31)); })),
         ("stats out of range", Box::new(|s, _| s.stats.breaches_lost = u32::MAX)),
+        ("cooldown out of range", Box::new(|s, _| s.breach_cooldown = 6001)),
     ];
     for (what, f) in &edits {
         let broken = edit(&g, |s| {
