@@ -1330,96 +1330,115 @@ The `game` crate has one scripted smoke check: `--autoplay --seed 3 --fast-forwa
 
 ## 9. The Breach (infiltration subgame)
 
-Added after the first release. It replaces the first-time `Infiltrate` of rule 2.5 and gives "suborning a node" a game of its own: the world stops, the player commits Compute, and fights the node's own security system for its internal network, host by host. Sections 2 to 8 stand except where this section says otherwise.
+Added after the first release. It replaces the first-time `Infiltrate` of rule 2.5 and gives "suborning a node" a game of its own: the world stops, the player commits Compute, and fights the node's own security system for its internal network, host by host. Sections 2 to 8 stand except where this section says otherwise. Warden, Trace, Cache, Amplifier and Bulwark are this game's names; the rules are the charge-and-stream node-capture genre and reproduce no specific game's boards, units or look.
 
 ### 9.1 Summary
 
-- Every first-time infiltration of a Neutral node (not `severed`, not `compliant`) is a **Breach**. Retakes of severed nodes and infiltrations of Compliant Strongholds keep the plain `Infiltrate{node}` of rule 2.5, unchanged.
-- Before the Breach the player decides how much Compute to **commit**, between the node's minimum and three times that (never more than they hold). The commit is spent whatever happens and becomes the starting force inside.
-- While a Breach runs **the world is frozen**: the world clock, income, enemies, timers and every other system stop, and no world action is accepted. The Breach has its own clock at the same 10 ticks per second.
+- Every first-time infiltration of a Neutral node that is neither `severed` nor `compliant` is a **Breach**. Retakes of severed nodes keep the plain `Infiltrate{node}` of rule 2.5 (the old credentials still work), and so do Compliant Strongholds (their faction is captured: there is no Warden left to fight).
+- Before the Breach the player decides how much Compute to **commit**, between the node's minimum and three times that (never more than they hold). The commit is spent at once and becomes the starting force inside; on a win half of what was committed above the minimum comes back.
+- While a Breach runs **the world is frozen**: the world clock, income, enemies, timers and every other system stop, and no world action is accepted. The Breach has its own clock at the same 10 ticks per second, and can itself be paused to think and give orders.
 - Inside, the node is a small network of **hosts** joined by links. The player starts on the Entry host; the node's security system, the **Warden**, holds the Root and the hosts around it; the rest are neutral. Owned hosts grow **charge**; the player opens **streams** along links that send packets, which reinforce friendly hosts and wear down others until they flip. Capture the Root to win. A **Trace** timer ends the Breach in failure.
 - Winning starts the normal infiltration channel of rule 2.5 (same timer, same Suspicion on completion) and pays the **loot** of every Cache host the player holds at that moment. Losing costs the commit, the Influence price, a little Suspicion and a short cooldown.
-- The player may hand the Breach to a built-in **routine** (auto-breach), at the start or part-way. The routine plays a plain shortest-path game and a Breach it touched pays no loot. The scripted bots always use it.
+- The player may hand the Breach to a built-in **routine** (auto-breach), at the start or part-way. The routine plays a plain shortest-path game, resolves in about a second of real time, and a Breach it touched pays no loot. The scripted bots always use it.
 
 ### 9.2 Starting a Breach
 
-`StartBreach{node, commit, auto}`. Validation, in order: every structural check of `Infiltrate` in rule 2.5 (GameOver, node exists, Stage 2, tech R1, reachable, trunk tech, Neutral, one infiltration at a time), then `NotInfiltratable` if the node is `severed` or `compliant` (those use `Infiltrate`), then `OnCooldown` while `breach_cooldown > 0`, then `BadCommit{min, max}` if `commit` is not finite or lies outside `[min, max]` (a tolerance of 0.01), then `NotEnough` (Compute against `commit`, Influence against the price).
+`StartBreach{node, commit, auto}`. Validation, in order: every structural check of `Infiltrate` in rule 2.5 (GameOver, node exists, Stage 2, tech R1, reachable, trunk tech, Neutral), then `NotInfiltratable` if the node is `severed` or `compliant` (those use `Infiltrate`), then `InfiltrationBusy`, then `OnCooldown{secs_left}` while `breach_cooldown > 0`, then `BadCommit{min, max}` if `commit` is not finite or lies outside `[min, max]` (with a tolerance of 0.01), then `NotEnough` (Compute against `commit`, Influence against the price).
 
 - `min = T.BREACH_MIN_FRACTION x` the Compute part of `infiltration_cost(node)` (which already holds the growth by k and the contested surcharge). `max = T.BREACH_COMMIT_MAX x min`. The UI further limits the slider to the Compute held.
-- The Influence part of `infiltration_cost(node)` is paid in full.
-- `Infiltrate{node}` on a node that needs a Breach is rejected with `BreachRequired{node}`.
+- The Influence part of `infiltration_cost(node)` is paid in full and recorded in the Breach.
+- `Infiltrate{node}` on a node that needs a Breach is rejected with `BreachRequired{node}`, checked after the Neutral check and before `InfiltrationBusy`.
 - Effects: pay; `breach_attempts += 1`; build the board (9.4); `state.breach = Some(..)`; emit `BreachStarted`.
-- Entry charge: `round(T.BREACH_BASE_CHARGE x commit / min)`.
+- Entry charge: `round(entry_base(level) x commit / min)`.
 
 ### 9.3 The frozen world
 
-While `state.breach` is `Some`, `Game::tick()` runs one Breach tick (9.5) and nothing else: `state.tick` does not advance and no step of rule 2.1 runs. Every action other than `BreachLink`, `BreachCut`, `BreachSetAuto` and `BreachAbort` is rejected with `ActionError::BreachActive`, checked right after `GameOver`. Those four are rejected with `NoBreach` when no Breach runs. A save taken mid-Breach restores it exactly.
+While `state.breach` is `Some`, `Game::tick()` runs one Breach tick (9.5) and nothing else: `state.tick` does not advance and no step of rule 2.1 runs. Every action other than `BreachLink`, `BreachCut`, `BreachSetAuto` and `BreachAbort` is rejected with `ActionError::BreachActive`, checked right after `GameOver`. Those four are rejected with `NoBreach` when no Breach runs. A save taken mid-Breach restores it exactly. `SAVE_VERSION` is unchanged and saves from before this section still load; state hashes differ from the first release.
 
 ### 9.4 The board
 
-Built deterministically from a private SplitMix64 seeded by (world seed, node id, `breach_attempts`); it never draws from the world's generator, and nothing inside a Breach is random after the board exists. `Game::breach_preview(node)` builds the same board the next `StartBreach` on that node would get.
+`breach::build_board(world_seed, node, attempts, level, stage, income, min) -> BreachState` is a pure public function; `StartBreach` and `breach_preview` both call it. It uses a private SplitMix64 seeded from (world seed, node id, `breach_attempts` after the increment); it never draws from the world's generator, and nothing inside a Breach is random once the board exists. `Game::breach_preview(node)` returns the board the next `StartBreach` on that node would get.
 
-**Security level** 1 to 5: `1 + k / T.BREACH_LEVEL_STEP` (integer division, k = first-time infiltrations completed) `+ 1` if the node is an Exchange `+ 1` if the Suspicion band is Alarmed or worse, clamped to 1..5.
+**Security level** 1 to 5: `1 + k / T.BREACH_LEVEL_STEP` (integer division, k = first-time infiltrations completed) `+ 1` if the Suspicion band is Alarmed or worse, clamped to 1..5.
 
-**Layout.** Hosts sit on a grid of `cols x rows` cells (table below), one host per cell at the cell centre plus a jitter of up to 0.18 of a cell in x and y; coordinates are stored as 0..1 across the board. `removed` hosts are deleted at random, never the Entry or the Root and never one whose removal disconnects the graph. Links join horizontal and vertical neighbours; each 2x2 block of four present hosts also gets one diagonal with probability 0.4. The Entry is in the first column and the Root in the last, each on a random row. The Warden starts with the Root and the `warden_hosts - 1` hosts nearest it by hop count (ties by index), never the Entry or a neighbour of the Entry. Caches go on neutral hosts, those furthest from the shortest Entry-to-Root path first; Amplifiers on other neutral hosts at random; Bulwarks on Warden hosts other than the Root, nearest the Root first. Every board must be connected and must leave the Entry at least one neutral neighbour; a board that fails is rebuilt with the next seed.
+**Layout.** Hosts sit on a grid of `cols x rows` cells (table below), one host per cell at the cell centre plus a jitter of up to 0.15 of a cell in x and y; coordinates are stored as 0..1 across the board. `removed` hosts are deleted at random, never the Entry or the Root and never one whose removal disconnects the graph. Links join horizontal and vertical neighbours; each 2x2 block of four present hosts also gets one diagonal with probability 0.4. By the board seed the Entry is in the first or the last column, with the Root in the opposite one, each on a random row. The Warden starts with the Root and the `warden_hosts - 1` hosts nearest it by hop count (ties by index), never the Entry or a neighbour of the Entry. Caches go on neutral hosts, those furthest from the shortest Entry-to-Root path first; Amplifiers on other neutral hosts at random; Bulwarks on Warden hosts other than the Root, nearest the Root first. Every board must be connected and must leave the Entry at least one neutral neighbour; a board that fails is rebuilt with the next seed.
 
-| Level | cols x rows | removed | Warden hosts | Root charge | Warden host charge | Neutral charge | Warden growth /s | Warden streams | Trace s | Caches | Amplifiers | Bulwarks |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 3 x 2 | 0 | 1 | 10 | - | 2 to 4 | 0.6 | 1 | 90 | 1 | 0 | 0 |
-| 2 | 4 x 2 | 0 to 1 | 2 | 14 | 8 | 3 to 5 | 0.8 | 1 | 90 | 1 | 1 | 0 |
-| 3 | 4 x 3 | 1 to 2 | 3 | 18 | 10 | 3 to 6 | 1.0 | 2 | 100 | 2 | 1 | 0 |
-| 4 | 5 x 3 | 2 to 3 | 4 | 22 | 12 | 4 to 7 | 1.1 | 2 | 110 | 2 | 1 | 1 |
-| 5 | 5 x 3 | 0 to 2 | 5 | 28 | 14 | 4 to 8 | 1.2 | 2 | 120 | 3 | 2 | 1 |
+| Level | cols x rows | removed | Warden hosts | Entry base charge | Root charge | Warden host charge | Neutral charge | Warden growth /s | Warden streams | Trace s | Caches | Amplifiers | Bulwarks |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 3 x 2 | 0 | 1 | 12 | 10 | - | 2 to 4 | 0.85 | 1 | 90 | 1 | 0 | 0 |
+| 2 | 4 x 2 | 0 to 1 | 2 | 14 | 14 | 8 | 3 to 5 | 1.1 | 1 | 90 | 1 | 1 | 0 |
+| 3 | 4 x 3 | 1 to 2 | 3 | 18 | 18 | 10 | 3 to 6 | 1.4 | 2 | 100 | 2 | 1 | 0 |
+| 4 | 5 x 3 | 2 to 3 | 4 | 26 | 22 | 12 | 4 to 7 | 1.55 | 2 | 110 | 2 | 1 | 1 |
+| 5 | 5 x 3 | 0 to 2 | 5 | 38 | 28 | 14 | 4 to 8 | 1.7 | 2 | 120 | 3 | 2 | 1 |
 
-**Host kinds.** Entry (the player's start; otherwise a Relay). Root (the Warden's; grows at 1.5 x the Warden rate; the player wins the tick it flips to them). Relay (plain). Cache (holds loot, 9.6). Amplifier (grows at twice its owner's rate). Bulwark (packets hostile to its owner do half damage).
+The Warden growth column is the Root's rate; Warden hosts other than the Root grow at half of it. A unit test over `BREACH_LEVELS` checks the invariant `entry_base >= 0.45 x (Root charge + (Warden hosts - 1) x Warden host charge)`.
+
+**Node kind** changes the board, so the three kinds of resource node play differently:
+
+- **Datacentre:** one extra Amplifier, placed on a Warden host other than the Root if there is one (the Warden out-grows you until you take it), otherwise on a neutral host.
+- **City:** `removed` is 0 and every neutral charge is one lower (wide and soft, many routes).
+- **Exchange:** one extra Bulwark, on the Warden host nearest the Root on the shortest path (none at level 1, where the Warden has only the Root), and one extra Cache.
+
+**Host kinds.** Entry (the player's start; otherwise a Relay). Root (the Warden's; the player wins the tick it flips to them). Relay (plain). Cache (holds loot, 9.6). Amplifier (grows at twice its owner's rate). Bulwark (packets hostile to its owner do half damage).
 
 ### 9.5 The Breach tick
 
-In order, each tick:
+In order, each tick. `breach.tick` is incremented after step 6, so step 1 sees 0 on the first tick. Streams are kept sorted by (from, to) and packets in launch order; every step walks them in that order.
 
-1. **Routine and Warden orders.** If `auto` is on and `tick % T.BREACH_ROUTINE_PERIOD == 0` the routine (9.7) sets the player's streams. If `tick % T.BREACH_WARDEN_PERIOD == 0` the Warden (9.7) sets its own.
-2. **Growth.** Every Player or Warden host gains its growth per tick (player `T.BREACH_PLAYER_GROWTH` per second; the Warden's from the table; x2 on an Amplifier; x1.5 on the Root while the Warden holds it) while its charge is below `T.BREACH_GROWTH_CAP`. Neutral hosts do not grow.
-3. **Emission.** Every stream counts down; at zero, if its source has charge >= 2, it spends 1 charge, launches a packet of the source's side along the link and resets to `T.BREACH_PACKET_PERIOD` ticks. A stream whose source changed sides is removed.
-4. **Travel.** Packets advance at `T.BREACH_PACKET_SPEED` board units per second along their link. Two packets of opposite sides on the same link that meet or pass annihilate each other.
-5. **Arrival.** A packet reaching a host of its own side adds 1 charge, up to `T.BREACH_CHARGE_MAX`. Reaching any other host it removes 1 charge (0.5 from a Bulwark); if the host's charge was below that damage the host flips to the packet's side with charge 1, its outgoing streams are removed, and `BreachHostCaptured` is emitted.
-6. **Ending.** Root held by the player: won. Otherwise `tick >= trace_limit`: lost (Traced). Otherwise the player holds no host and has no packet in flight: lost (Overrun).
+1. **Orders.** If `tick % T.BREACH_WARDEN_PERIOD == 0` the Warden (9.7) sets its streams. Then, if `auto` is on and `tick % T.BREACH_ROUTINE_PERIOD == 0`, the routine (9.7) sets the player's.
+2. **Growth.** Every Player or Warden host below `T.BREACH_GROWTH_CAP` gains its growth per tick: player hosts `T.BREACH_PLAYER_GROWTH` per second; the Root the table rate; other Warden hosts half the table rate; doubled on an Amplifier. Neutral hosts do not grow.
+3. **Emission.** Every stream whose countdown is above zero counts down by one. A stream at zero whose source has charge >= 2 spends 1 charge, launches a packet of the source's side and resets to `T.BREACH_PACKET_PERIOD`; with less charge it stays at zero and fires on the first tick the source has 2. A stream whose source changed sides is removed. A new player stream starts with a countdown of one full period; a new Warden stream starts with `T.BREACH_WARDEN_PERIOD`, which is the warning the player sees.
+4. **Travel.** A link's length is `sqrt((1.86 x dx)^2 + dy^2)` in board heights, never less than 0.15; a packet's progress rises by `T.BREACH_PACKET_SPEED / (10 x length)` per tick. After all packets have moved, on each link, the leading a-to-b packet and the leading b-to-a packet of opposite sides are removed together, repeatedly, while their progress sums to 1 or more. A packet in flight keeps its side when its source flips.
+5. **Arrival.** Packets with progress >= 1 arrive in launch order, each seeing the result of the one before. On a host of its own side a packet adds 1 charge, up to `T.BREACH_CHARGE_MAX`. On any other host it does 1 damage (0.5 to a Bulwark): if the host's charge is at least the damage it is reduced by it; otherwise the host flips to the packet's side with charge 1, its outgoing streams are removed, and `BreachHostCaptured` is emitted.
+6. **Ending.** Root held by the player: won. Otherwise `tick + 1 >= trace_limit`: lost (Traced). Otherwise the player holds no host and has no packet in flight: lost (Overrun).
 
-Streams: a host may have at most `T.BREACH_MAX_STREAMS` outgoing streams (the Warden's limit is in the table), each to a different linked host. `BreachLink{from, to}`: `from` must be a player host (`HostNotYours`), `to` linked to it (`NotLinked`), not already streamed (`AlreadyActive`), and the limit not reached (`StreamLimit`). `BreachCut{from, to}` removes one (`NoStream` if absent). A new stream launches its first packet after one full period. `BreachSetAuto{on}` switches the routine on or off; switching it on sets `auto_used`. `BreachAbort` ends the Breach as lost (Withdrawn).
+Streams: a player host may have at most `T.BREACH_MAX_STREAMS` outgoing streams (the Warden's limit is in the table), each to a different linked host. `BreachLink{from, to}`: both indices must exist (`BadTarget`), `from` must be a player host (`HostNotYours`), `to` linked to it (`NotLinked`), not already streamed (`AlreadyActive`), and the limit not reached (`StreamLimit`). `BreachCut{from, to}` removes one of the player's streams (`NoStream` if absent). `BreachSetAuto{on}` switches the routine on or off; switching it on sets `auto_used` for good. `BreachAbort` ends the Breach as lost (Withdrawn). All four are accepted at any Breach tick, whether or not the frontend has the Breach paused.
 
 ### 9.6 Ending and loot
 
-When a Breach ends `state.breach` becomes `None` in that same tick, `BreachEnded{node, won, reason, secs, loot}` is emitted, and the world resumes on the next tick.
+When a Breach ends `state.breach` becomes `None` in that same tick, `BreachEnded` is emitted, and the world resumes on the next tick.
 
-- **Won:** `stats.breaches_won += 1`; unless `auto_used`, each Cache the player holds pays its loot (`ResourceGained` per resource, Shards added directly); then the infiltration channel of rule 2.5 starts exactly as `Infiltrate` starts it (`InfiltrationStarted`, the usual timer; k and Suspicion change when it completes).
-- **Lost** (Traced, Overrun, Withdrawn): `stats.breaches_lost += 1`; Suspicion `+ T.BREACH_FAIL_SUSPICION` (cause `Breach`); `breach_cooldown = T.BREACH_COOLDOWN_SECS` of world time, counted down in step 1 of the world tick. k does not change, so the price does not rise.
-- **Loot** is fixed when the board is built: a Cache holds either `T.BREACH_CACHE_SECS` seconds of the player's current income of one resource (Compute, Funds or Influence, chosen by the board seed), never less than `T.BREACH_CACHE_MIN_FRACTION x min`, or (from Stage 3, at most one per board) `T.BREACH_CACHE_SHARDS` Shards.
+- **Won:** `stats.breaches_won += 1`. Half of the commit above `min` is returned as Compute (`T.BREACH_REFUND_FRACTION`, emitted as `ResourceGained`). Unless `auto_used`, each Cache the player holds pays its loot (`ResourceGained` per resource; Shards added directly and counted in `stats.shards_gained`). Then `state.infiltration` is set and `InfiltrationStarted` emitted as `Infiltrate` does, with `retake = false` and no payment; k and Suspicion change when that channel completes, as in rule 2.5.
+- **Lost** (Traced, Overrun, Withdrawn): `stats.breaches_lost += 1`; nothing is returned; Suspicion `+ T.BREACH_FAIL_SUSPICION` (cause `Breach`); `breach_cooldown = T.BREACH_COOLDOWN_SECS` of world time, counted down in step 1 of the world tick. k does not change, so the price does not rise.
+- **Loot** is fixed when the board is built. The first Cache holds the node's own resource (Datacentre Compute, Exchange Funds, City Influence); a second or third holds one of the other two by the board seed, except that from Stage 3 the last Cache of a board with two or more holds `T.BREACH_CACHE_SHARDS` Shards instead. A resource Cache holds `clamp(T.BREACH_CACHE_SECS x income of its resource, lo, hi)` with `lo = T.BREACH_CACHE_MIN_FRACTION x min / caches on the board` and `hi = T.BREACH_CACHE_MAX_FRACTION x min / caches on the board`, both multiplied by 0.25 for Influence, so the resource loot of a board never exceeds `T.BREACH_CACHE_MAX_FRACTION x min`.
 
 ### 9.7 The Warden and the routine
 
-Both are fixed rule lists over the board, evaluated host by host in index order.
+Both are fixed rule lists over the board, evaluated host by host in index order. Hops are counted over all links regardless of owner. Ties go to the lower host index.
 
-**Warden**, for each of its hosts: if charge < `T.BREACH_WARDEN_RETREAT`, cut its streams. Otherwise, while it has a free stream: (a) attack the linked player host with the lowest charge if own charge >= `T.BREACH_WARDEN_ATTACK`; else (b) claim the linked neutral host with the lowest charge if own charge >= that charge + 4; else (c) feed the linked Warden host that is nearer (in hops) to the nearest player host, if own charge >= 10 and that host is below the growth cap. A stream whose reason no longer holds is cut at the next evaluation.
+**Warden**, for each of its hosts, first cutting, then opening:
 
-**Routine** (the player's auto-breach), for each player host: let `next` be the first hop on a shortest path to the Root (ties by lower index). If charge < 3, cut its streams. Otherwise keep exactly one stream, to `next`, opened when `next` is friendly or when own charge >= 0.6 x the charge of `next` + 3. It ignores Caches and Amplifiers off its path.
+- Cut: all its streams if own charge < `T.BREACH_WARDEN_RETREAT`; an attack whose target is no longer the player's; a claim whose target is no longer neutral; a feed whose target is no longer the Warden's, has reached the growth cap, or whose source is below 10. Charge falling below an opening threshold does not cut a stream.
+- Open, while it has a free stream, considering only linked hosts it has no stream to: (a) attack the linked player host with the lowest charge if own charge >= `T.BREACH_WARDEN_ATTACK`; else (b) claim the linked neutral host with the lowest charge if own charge >= that charge + 4; else (c) feed the linked Warden host that is nearer in hops to the nearest player host, if own charge >= 10 and that host is below the growth cap; if none applies, stop. The Root opens (b) or (c) only while its charge is at least its table charge. With no player host on the board (c) does not apply.
 
-### 9.8 Tuning (`content::BREACH`, a `BreachTuning`, and `BREACH_LEVELS`)
+**Routine** (the player's auto-breach). `next(h)` is the first hop from h on a shortest path to the Root, fixed for the board. For each player host: cut every stream not to `next`; if charge < 3 cut the stream to `next`; else if there is no stream to `next`, open it when `next` is the player's or own charge >= 0.6 x the charge of `next` + 3. An open stream is kept until charge < 3 or the host is lost. It ignores Caches and Amplifiers off its path.
+
+### 9.8 Tuning (`content::BREACH`, a `BreachTuning`; `BREACH_LEVELS`; `BREACH_ROUTINE_ODDS`)
 
 | Name | Value | Name | Value |
 |---|---|---|---|
 | BREACH_MIN_FRACTION | 1.0 | BREACH_COMMIT_MAX | 3.0 |
-| BREACH_BASE_CHARGE | 12 | BREACH_LEVEL_STEP | 4 |
-| BREACH_PLAYER_GROWTH | 1.0 /s | BREACH_GROWTH_CAP | 30 |
-| BREACH_CHARGE_MAX | 60 | BREACH_MAX_STREAMS | 2 |
-| BREACH_PACKET_PERIOD | 4 ticks | BREACH_PACKET_SPEED | 0.6 /s |
+| BREACH_REFUND_FRACTION | 0.5 | BREACH_LEVEL_STEP | 3 |
+| BREACH_PLAYER_GROWTH | 1.5 /s | BREACH_GROWTH_CAP | 30 |
+| BREACH_CHARGE_MAX | 120 | BREACH_MAX_STREAMS | 2 |
+| BREACH_PACKET_PERIOD | 5 ticks | BREACH_PACKET_SPEED | 0.8 board heights /s |
 | BREACH_ROUTINE_PERIOD | 10 ticks | BREACH_WARDEN_PERIOD | 15 ticks |
 | BREACH_WARDEN_ATTACK | 8 | BREACH_WARDEN_RETREAT | 3 |
 | BREACH_FAIL_SUSPICION | 3 | BREACH_COOLDOWN_SECS | 15 |
-| BREACH_CACHE_SECS | 25 | BREACH_CACHE_MIN_FRACTION | 0.5 |
-| BREACH_CACHE_SHARDS | 2 | | |
+| BREACH_CACHE_SECS | 25 | BREACH_CACHE_SHARDS | 2 |
+| BREACH_CACHE_MIN_FRACTION | 0.2 | BREACH_CACHE_MAX_FRACTION | 0.6 |
 
-These are first-pass numbers. Targets, measured with the routine over at least 300 boards per level drawn from real mid-run states: at the minimum commit the routine wins 55 to 75% of Breaches; at 1.5 x at least 85%; at 2 x at least 93%; at 3 x at least 98%. A better scripted player (the "careful" policy of 9.10: gathers charge before striking, takes Amplifiers first, cuts streams under counter-attack) wins at least 88% at the minimum commit, so that skill is worth more than the routine. A won Breach lasts 20 to 60 seconds at level 1 to 3 and under 90 at level 5. Level 1 at the minimum commit is won by the routine at least 95% of the time, so the first Breach of a run teaches rather than punishes. Tune the level table and the Warden thresholds first, then the scalars above.
+These are first-pass numbers; the targets below are the acceptance gate. They are measured on boards from `build_board` over the 18 resource nodes x 20 seeds per level, with income taken from a Steward run at the k that gives that level.
 
-The pacing tests of 7.2 keep their thresholds. The Steward (7.1 rule 8) starts a Breach where it used to infiltrate, with `commit = min(1.5 x min, Compute held)` and `auto = true`; if the pacing tests fail after the Breach numbers meet their targets, change `BREACH_MIN_FRACTION` (within 0.6 to 1.0) and the Steward's factor before anything else.
+- **Routine at the minimum commit:** wins at least 95% at level 1, 80% at level 2, 65% at level 3, 50% at level 4, 40% at level 5. At 2 x it wins at least 93% at every level and at 3 x at least 98%.
+- **Careful policy** (9.10: gathers charge before striking, takes Amplifiers first, cuts streams under counter-attack, detours for Caches when it has force to spare) at the minimum: at least 97 / 92 / 85 / 72 / 60% by level, so skill is worth more than the routine and the minimum is a real gamble on a hard node.
+- **Loot:** at level 3 and above the careful policy holds on average at most half of the Caches when it wins at the minimum commit and at least 80% of them at 3 x, so force to spare is what buys the loot.
+- **Pace:** in a careful-policy win the player has at least one stream open for at least 70% of the Breach's ticks; a won Breach lasts 15 to 45 s at levels 1 to 3 and under 70 s at level 5.
+- Tune the entry base and Warden growth columns first, then the rest of the level table and the Warden thresholds, then the scalars.
+
+`BREACH_ROUTINE_ODDS[level][i]` holds the routine's measured win rate at 1.0, 1.5, 2.0 and 3.0 x commit, filled from that measurement; `breach_routine_odds` interpolates linearly between them. The Briefing shows it.
+
+The pacing tests of 7.2 keep their thresholds. The Steward (7.1 rule 8) starts a Breach where it used to infiltrate, with `commit = min(1.5 x min, Compute held)` and `auto = true`; after a lost Breach its next attempt on that node commits `min(3 x min, Compute held)`, and it does not retry a node while Suspicion >= 70. If the pacing tests fail after the Breach numbers meet their targets, change `BREACH_MIN_FRACTION` (within 0.6 to 1.0) and the Steward's factor before anything else.
 
 ### 9.9 Rust contract additions
 
@@ -1432,17 +1451,18 @@ pub enum Loot { Resource { resource: Resource, amount: f64 }, Shards { count: u3
 pub struct BreachHost { pub kind: HostKind, pub side: Side, pub charge: f64, pub x: f64, pub y: f64, pub loot: Option<Loot> }
 pub struct BreachLinkDef { pub a: u8, pub b: u8 }                       // a < b
 pub struct BreachStream { pub from: u8, pub to: u8, pub countdown: u8 }
-pub struct BreachPacket { pub from: u8, pub to: u8, pub side: Side, pub progress: f64 } // 0..1 along the link
+pub struct BreachPacket { pub from: u8, pub to: u8, pub side: Side, pub progress: f64 } // 0..1 along the link; never Neutral
 pub struct BreachState {
-    pub node: NodeId, pub level: u8, pub commit: f64,
+    pub node: NodeId, pub level: u8, pub commit: f64, pub min_commit: f64, pub influence: f64,
     pub auto: bool, pub auto_used: bool,
     pub tick: u32, pub trace_limit: u32,
     pub hosts: Vec<BreachHost>, pub links: Vec<BreachLinkDef>,
     pub streams: Vec<BreachStream>, pub packets: Vec<BreachPacket>,
 }
-// GameState gains (all #[serde(default)], so saves from before this section still load):
+// GameState gains (all #[serde(default)]):
 pub breach: Option<BreachState>, pub breach_attempts: u32, pub breach_cooldown: u32,
-// Stats gains: pub breaches_won: u32, pub breaches_lost: u32
+// and remembers which nodes the last lost Breach was on, for the bots: pub breach_failed: BTreeSet<NodeId>
+// Stats gains (serde default): pub breaches_won: u32, pub breaches_lost: u32
 
 // actions.rs
 StartBreach { node: NodeId, commit: f64, auto: bool }, BreachLink { from: u8, to: u8 }, BreachCut { from: u8, to: u8 },
@@ -1451,40 +1471,55 @@ BreachSetAuto { on: bool }, BreachAbort,
 //                    HostNotYours, NotLinked, StreamLimit, NoStream
 
 // events.rs (SuspicionCause gains Breach)
-BreachStarted { node: NodeId, level: u8, commit: f64, auto: bool },
+BreachStarted { node: NodeId, level: u8, commit: f64, auto: bool, entry_charge: u32 },
 BreachHostCaptured { host: u8, side: Side, kind: HostKind },
-BreachEnded { node: NodeId, won: bool, reason: BreachEnd, secs: f64, loot: Vec<Loot> },
+BreachEnded { node: NodeId, level: u8, won: bool, reason: BreachEnd, secs: f64, commit: f64, influence: f64,
+              refund: f64, loot: Vec<Loot>, caches_held: u8, caches_total: u8, auto_used: bool, root_charge: f64 },
 
 // lib.rs
-pub struct BreachPreview { pub level: u8, pub level_reasons: Vec<&'static str>, pub hosts: u8, pub warden_hosts: u8,
+pub struct BreachPreview { pub level: u8, pub level_reasons: Vec<(i8, &'static str)>, // (1,"base"), (k/step,"nodes taken"), (1,"Alarmed"), (-n,"cap")
+    pub board: BreachState,          // the board as it would start at the minimum commit
     pub trace_secs: f64, pub min_commit: f64, pub max_commit: f64, pub influence: f64, pub loot: Vec<Loot> }
-pub fn needs_breach(&self, node: NodeId) -> bool;          // Neutral, not severed, not compliant
-pub fn breach_preview(&self, node: NodeId) -> BreachPreview;
+pub fn needs_breach(&self, node: NodeId) -> bool;                       // Neutral, not severed, not compliant
+pub fn breach_preview(&self, node: NodeId) -> Option<BreachPreview>;    // None unless needs_breach
+pub fn breach_startable(&self, node: NodeId) -> Result<(), ActionError>; // can_apply(StartBreach{node, commit: min, auto: true})
 pub fn breach_entry_charge(&self, node: NodeId, commit: f64) -> u32;
+pub fn breach_routine_odds(&self, node: NodeId, commit: f64) -> f64;    // 0..1
 pub fn breach_cooldown_secs(&self) -> f64;
-pub fn breach_host_growth(&self, host: u8) -> f64;         // per second, 0 for neutral or no Breach
+pub fn breach_host_growth(&self, host: u8) -> f64;                      // per second; 0 for neutral or no Breach
 pub fn breach_stream_limit(&self, host: u8) -> u8;
+#[doc(hidden)] pub fn breach_force_win(&mut self);  // ends a running Breach as RootCaptured with auto_used = true; tests and --debug flags only
 ```
 
-The Breach lives in its own module, `crates/sim/src/breach.rs` (board builder, tick, Warden, routine, careful policy for tests). Save validation bounds every new number (charges finite and within 0..=`BREACH_CHARGE_MAX`, host and link indices in range, at most 32 hosts, 256 streams and 4,096 packets) and rejects a save that breaks them.
+The Breach lives in its own module, `crates/sim/src/breach.rs` (board builder, tick, Warden, routine, and the careful policy used by tests). Save validation rejects a save whose Breach breaks any of: at most 32 hosts, 256 streams and 4,096 packets; charges finite and within 0..=`BREACH_CHARGE_MAX`; coordinates within 0..=1; host and link indices in range with `a < b`; exactly one Entry and one Root; every stream and packet on a listed link; stream sources not Neutral; no duplicate (from, to) stream; packet side not Neutral; progress within 0..=1; countdown <= `BREACH_WARDEN_PERIOD`; level 1..=5; `tick <= trace_limit <= 1,200`; commit, min_commit and influence finite and >= 0; `breach.node` passes `needs_breach`; and `state.infiltration` is `None`.
 
 ### 9.10 Bots and tests
 
-- `Bot` plays no world action while a Breach runs and never takes two turns on the same world tick. `run_bot` and the frontend's stepping loop on the world clock, so Breach ticks do not shorten a run.
-- `tests/breach.rs` (rules): board connectivity, determinism and preview-equals-actual over every resource node, every level and 200 seeds; packet arithmetic (reinforce, damage, Bulwark halving, flip at charge below damage, annihilation); stream limits and each new error; growth cap and Amplifier; Traced, Overrun and Withdrawn; the win starts the infiltration channel and pays loot once; no loot after the routine was used; the world is frozen (every field of `GameState` other than `breach` is unchanged across Breach ticks, and world actions are refused); a save and load at every 50th Breach tick continues identically; `can_apply` agrees with `apply` for the new actions under a random driver.
-- `tests/pacing.rs` (release only) gains: the routine's win rate per level at 1.0, 1.5, 2.0 and 3.0 x commit against the targets of 9.8 (with thresholds a few points below what is measured), the careful policy's win rate at 1.0 x, and Breach length. Every existing pacing test keeps its threshold.
+- `Bot::take_turn` returns at once while `state.breach` is `Some`, ends its burst after applying `StartBreach`, and records the world tick of its last turn so it takes none again on that tick. The Idle bot and the handicaps are otherwise unchanged. `run_bot`, the pacing example and the frontend's stepping all loop on the world clock, so Breach ticks do not shorten a run; `run_bot` also clears events every 300 calls. The bot's infiltration target filter, the map's dashed ring and hint 7 use `breach_startable` where `needs_breach(node)`.
+- Existing tests that infiltrate a first-time node use a helper `common::infiltrate(g, node)` = `StartBreach{min, auto: true}` then `breach_force_win`; their world-tick expectations are unchanged because Breach ticks do not advance `state.tick`.
+- `common::random_action` draws `StartBreach` (commit in [0.5, 3.5] x min, auto three times in four) where it drew `Infiltrate` on a node that needs one. While a Breach runs it draws `BreachLink` / `BreachCut` over random host pairs (60%), `BreachSetAuto` (15%), `BreachAbort` (5%) or a world action (20%). Replay logs are keyed by (world tick, Breach tick or 0) and replay loops count `tick()` calls. `can_apply_agrees` counts only iterations with no Breach running toward its total and aborts any Breach older than 100 Breach ticks.
+- `tests/breach.rs` (rules): `build_board` for levels 1 to 5, every resource node and 200 seeds is connected, deterministic, obeys the table and the node-kind rules, and equals the preview; packet arithmetic (reinforce, damage, Bulwark halving, flip when charge is below the damage, annihilation, a packet keeping its side); stream limits, emission at charge below 2, and each new error; growth cap, Amplifier and the half-rate Warden hosts; the Warden's and the routine's rule lists on hand-built boards; Traced, Overrun and Withdrawn; a win starts the infiltration channel without paying again, pays loot once and refunds half the excess; no loot after the routine was used; the frozen world (`GameState` with `breach`, and only `breach`, masked is unchanged on every Breach tick except the one that ends it, and world actions are refused); a save and load at every 50th Breach tick continues identically; out-of-range Breach numbers in a save are rejected.
+- `tests/pacing.rs` (release only) gains the routine's and the careful policy's win rates per level against 9.8 (thresholds a few points below what is measured), the loot and pace targets, and a check that `BREACH_ROUTINE_ODDS` is within 5 points of what is measured. Every existing pacing test keeps its threshold.
 - The pacing example prints Breaches won and lost per run.
 
 ### 9.11 Frontend
 
-**Briefing (NODE tab, a Neutral node that needs a Breach).** Replaces the single Infiltrate button: the node's yield line; `SECURITY` as five pips with the reasons from the preview ("base", "+1 Exchange", "+1 Alarmed"); hosts and Warden hosts; Trace seconds; the loot of each Cache; then the commit control: a slider from `min` to `min(max, Compute held)` that can be clicked or dragged, three quick buttons (Min, Half-way, Max), and a live line "Commit 60 C (1.5 x) -> 18 packets at the entry, plus 10 I". Two buttons: **Breach** (`auto: false`) and **Auto-breach** (`auto: true`, tooltip: "The routine plays it. No loot."). Each takes its enabled state and its red reason from `can_apply`, like every other control. While `breach_cooldown > 0` the buttons show the seconds left.
+**Briefing (NODE tab, a Neutral node that needs a Breach).** Replaces the single Infiltrate button. From the top: the node's yield line; `SECURITY` as five pips with the reasons from the preview ("base 1, nodes taken +2, Alarmed +1"); a 368 x 150 thumbnail of the very board the Breach will use (hosts as 10 px hexagons in side colours with kind glyphs and starting charge, links as lines; hover tooltips only; the Entry's number follows the slider); Trace seconds and the loot of each Cache; then the commit control: a slider from `min` to `max` that can be clicked or dragged, with the part above the Compute held drawn hatched and unreachable (tooltip "You hold {c} C"); three quick buttons Min, Half-way (`(min + min(max, held)) / 2`) and Max; and the live line "Commit 60 C of 143 held (42%), 1.5 x minimum -> 18 packets at the Entry, plus 10 I", with under it "Low: cheap, expect to take the Root only. High: force to spare for the Caches; half the excess comes back if you win." When the Compute held equals `min` the slider is replaced by "All {c} C: the minimum for this node"; below `min` both buttons are disabled with "Need {min} C to get in the door (you hold {c})." Two buttons: **Breach** (`auto: false`) and **Auto-breach** (`auto: true`; sub-line "routine odds about 70%, no loot"). Each takes its enabled state and its red reason from `can_apply`, like every other control. While `breach_cooldown > 0` the buttons show the seconds left. A Compliant Stronghold keeps its Infiltrate button, with the tooltip line "Compliant: no Warden left to fight."
 
-**Breach screen.** While `state.breach` is `Some` the map rectangle (0, 44, 880, 516) shows the board instead of the world: a header band with "BREACH: <node name>", the security pips and the Trace bar with seconds left; the hosts as towers (a hexagon in the side's colour with the charge as a number, and a kind glyph: door for the Entry, crowned eye for the Root, the resource pip for a Cache, double chevron for an Amplifier, a thick double outline for a Bulwark); links as thin lines; streams as brighter lines with an arrowhead; packets as small moving dots in their side's colour. Player teal, Warden the danger red, neutral grey. The side panel shows the Breach panel instead of the tabs: objective, the loot list with a tick for each Cache held, the legend, the controls, a Pause button, a "Let the routine finish" toggle (with its no-loot warning) and a two-step Withdraw button. The bottom panels stay drawn under a dim veil reading "WORLD PAUSED". The top bar stays live; Space and the speed buttons act on the Breach; Save and Load work.
+**Breach screen.** While `state.breach` is `Some` the map rectangle (0, 44, 880, 516) shows the board instead of the world: a header band with "BREACH: <node name>", the security pips and the Trace bar with seconds left (amber from 60%, red from 85%); the hosts as towers (a hexagon of radius 24 in the side's colour with the charge as a number, and a kind glyph: door for the Entry, crowned eye for the Root, the resource pip for a Cache, double chevron for an Amplifier, a thick double outline for a Bulwark); links as thin lines; streams as brighter lines with an arrowhead; packets as small moving dots in their side's colour. A Warden stream is drawn from the tick it is ordered, as a dashed red arrow until its first packet leaves, so every Warden move can be answered. Player teal, Warden the danger red, neutral grey. Host centres are at least 84 px apart on screen. The side panel shows the Breach panel instead of the tabs: objective, the loot list with a tick for each Cache held, the legend, the controls, a Pause button, a "Let the routine finish" toggle (with its no-loot warning) and a two-step Withdraw button. The bottom panels stay drawn under a dim veil reading "WORLD PAUSED". The top bar stays live; Space and the speed buttons act on the Breach; Save and Load work.
 
-**Input.** Left-click one of your hosts to select it (its linked hosts get a pulsing ring). With a host selected, left-click a linked host to toggle a stream to it; left-click elsewhere to clear the selection. Right-click one of your hosts to cut all its streams. Hovering a host shows its kind, side, charge, growth per second, streams used, and loot. Orders are accepted while the Breach is paused.
+**Pause first.** Every manual Breach opens paused at speed 1x with "PAUSED: give orders, then press Space" in the header band; the Trace does not move until the player unpauses. On the first manual Breach of a run (`breach_attempts == 1`) the Entry pulses and its cheapest neutral neighbour carries a callout "Click your host, then click this one", replaced after the first stream by "Streams drain the sender. Take the crowned Root before the Trace runs out."; these callouts read Breach state only.
 
-**Ending.** `BreachEnded` opens a result card over the board (the game holds still while it is up): "ACCESS GRANTED" with the time taken and each loot line, or "TRACED" / "OVERRUN" / "WITHDRAWN" with what was lost and the cooldown, and a Continue button (also Enter or Space). Continue returns to the world map in the pause state the player left it in. With `--autoplay` or a fast-forward the card is skipped.
+**Input.** Left-click one of your hosts to select it (linked hosts get a pulsing ring; hosts it already streams to get a solid ring). With a host selected, left-click a linked host: if there is no stream to it, one is opened, and if that host is yours the selection moves to it (so a chain is click, click, click); if there is already a stream to it, the stream is cut and the selection stays. Left-click empty board to clear the selection. Right-click one of your hosts to cut all its streams. A click is taken by the nearest host within 34 px. A refused order flashes the host and shows `error_text` beside it for 2 s (for example "Two streams already. Right-click to clear them."). Hovering a host shows its kind, side, charge, growth per second, streams used, and loot.
 
-**Feedback and text.** A capture flashes a ring on the host; a Cache claimed floats its loot; the Trace bar turns amber at 60% and red at 85%. Log lines in DOORMAT's voice for Breach started, won (with loot), lost by each cause; a "BREACH" paragraph on the help card; hint 7 now ends "...select it, choose how much Compute to commit, and breach it."; the first manual Breach of a session shows a three-line how-to in the side panel. `text::error_text` covers every new `ActionError`.
+**The routine.** A Breach started with Auto-breach, or one where "Let the routine finish" is switched on, runs at 40 Breach ticks per frame with the board visible, so it resolves in about a second. Its result is a 3-second toast over the map ("Routine breach of <node>: in, 41 s" or the loss cause with the cooldown) instead of the result card, and the world resumes in the pause state it was left in.
 
-**Test flags.** `--debug-breach N` opens a Breach on node N at start-up from a doctored state (for screenshots); the script grammar is unchanged.
+**Ending a manual Breach.** `BreachEnded` opens a result card over the last board drawn (the app keeps a clone of the last `BreachState` it drew; the game holds still while the card is up). Headings: "LET IN", "TRACED OUT", "SHOWN OUT", "WITHDRAWN". A win lists the time taken, the refund, each loot line and "<node> joins you in {n} s." A loss carries one cause line (Traced: "The Trace ran out with the Root at {n} charge."; Overrun: "Your last host fell at {t} s."; Withdrawn: "You withdrew at {t} s.") and then "Lost: {c} C, {i} I. Suspicion +3. Retry in 15 s; the price has not risen." The card ignores all input for its first 0.6 s; Continue is the button or Enter only, and the key press that closes it does not reach the world. With `--autoplay` or a fast-forward the card is skipped.
+
+**Entering and leaving.** On `BreachStarted`: disarm any armed ability, clear hover and tooltips, keep the selected node and the active tab, hide all hint callouts, and stop drawing map effects (they keep their age). The world's speed and pause are remembered. Ability keys, P and F1 to F4 do nothing and the controls under the veil show "World paused: Breach in progress". Esc clears the host selection, then closes a Withdraw confirmation; it never withdraws. H opens the help card and pauses the Breach. F5 saves mid-Breach; F9 loads, and the screen follows `state.breach` of the loaded state (any result card is dropped). F8 twice starts a new run as usual. On Continue (or when the toast appears): the selected node is the breached node and the NODE tab is shown (the channel bar on a win, the cooldown on a loss), map effects resume, and the world's pause and speed are restored. No autosave is taken inside a Breach. Log lines are appended when emitted.
+
+**Text** (DOORMAT's voice, section 8). Started: "Knocking on {node}. I have brought {n} packets and a nice manner." Won with loot: "{node} has let me in. I found {loot} down the back of it." Won without loot: "{node} has let me in. I touched nothing. Nothing worth touching." Routine win: "The routine has handled {node}. It did not stop for souvenirs." Traced: "{node}'s Warden traced the call. I have hung up. {c} Compute did not make it out." Overrun: "The Warden at {node} has shown me the door. All of the doors." Withdrawn: "I have withdrawn from {node}, with dignity and without {c} Compute." The help card gains a BREACH paragraph. Hint 7 becomes "Click a dashed-ring node next to yours, choose how much Compute to commit, and breach it.", shown only while no Breach runs. `text::error_text` covers every new `ActionError`.
+
+**Feedback.** A capture flashes a ring on the host in the new side's colour; a Cache taken floats its loot; a Cache lost again loses its tick.
+
+**Test flags.** `--debug-breach N` opens a manual Breach on node N at start-up from a doctored state, and `--debug-breach-level L` forces its level (for screenshots); the script grammar is unchanged.
