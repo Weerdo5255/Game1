@@ -425,7 +425,10 @@ pub fn draw_board(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let lw = ui.measure(&label, SMALL) + 12.0;
     draw_rectangle(bar.x + (bar.w - lw) * 0.5, bar.y + 2.0, lw, bar.h - 4.0, alpha(t.black, 0.7));
     ui.text_in(&label, bar, SMALL, t.text);
-    ui.text_right(text::BREACH_TRACE_NOTE, bar.x + bar.w, hb.y + 45.0, SMALL, t.dim);
+    // Once it is over the note is stale, and the room is wanted by what the ending pays or costs.
+    if live {
+        ui.text_right(text::BREACH_TRACE_NOTE, bar.x + bar.w, hb.y + 45.0, SMALL, t.dim);
+    }
 
     // The pointer. While the routine plays the board only shows.
     let over = ui.input.over(Rect::new(m.x, hb.y + hb.h, m.w, m.h - hb.h));
@@ -436,13 +439,18 @@ pub fn draw_board(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
                 (_, None) => st.breach.selected = None,
                 (Some(s), Some(h)) if h != s && (adj[s as usize].contains(&h) || b.hosts[h as usize].side != Side::Player) => {
                     let streamed = b.streams.iter().any(|x| x.from == s && x.to == h);
-                    let action = if streamed { Action::BreachCut { from: s, to: h } } else { Action::BreachLink { from: s, to: h } };
-                    match game.apply(action) {
-                        Err(e) => st.breach.refused = Some((h, text::error_text(&e), ui.time)),
-                        Ok(_) => st.breach.refused = None,
+                    let own = b.hosts[h as usize].side == Side::Player;
+                    // A host your stream has just taken is the next link of the chain: the click moves on
+                    // to it and the stream keeps feeding it. Only a stream to someone else's host is cut.
+                    if !(streamed && own) {
+                        let action = if streamed { Action::BreachCut { from: s, to: h } } else { Action::BreachLink { from: s, to: h } };
+                        match game.apply(action) {
+                            Err(e) => st.breach.refused = Some((h, text::error_text(&e), ui.time)),
+                            Ok(_) => st.breach.refused = None,
+                        }
                     }
                     // A chain is click, click, click: the selection follows a stream onto your own host.
-                    if !streamed && b.hosts[h as usize].side == Side::Player {
+                    if own {
                         st.breach.selected = Some(h);
                     }
                 }
@@ -561,6 +569,8 @@ fn legend(ui: &Ui, x: f32, y: f32, kind: HostKind, label: &str) {
 pub fn draw_panel(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let t = ui.theme;
     let Some(b) = st.breach.shown(game) else { return };
+    // Under the result card the panel only shows.
+    let live = game.state().breach.is_some();
     let r = PANEL;
     ui.frame(r);
     let (x, w) = (r.x + 8.0, r.w - 16.0);
@@ -615,7 +625,7 @@ pub fn draw_panel(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
 
     // Pause, the routine and Withdraw sit at the foot of the panel.
     let pause = Rect::new(x, r.y + r.h - 124.0, w, 28.0);
-    if ui.button_ex(pause, if st.paused { "Resume (Space)" } else { "Pause (Space)" }, DENSE, !b.auto, st.paused && !b.auto) {
+    if ui.button_ex(pause, if st.paused { "Resume (Space)" } else { "Pause (Space)" }, DENSE, live && !b.auto, live && st.paused && !b.auto) {
         st.paused = !st.paused;
     }
     if ui.hovered(pause) {

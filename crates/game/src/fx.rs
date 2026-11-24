@@ -280,6 +280,8 @@ impl Fx {
         }
         let meter_mid = vec2(METER.x + METER.w * 0.5, METER.y + 22.0);
 
+        // Gains of one resource in the same frame (a Breach's refund and its loot) are shown as one sum.
+        let mut gained: Vec<(Resource, f64)> = Vec::new();
         for e in &st.events {
             use Event as V;
             match e {
@@ -497,10 +499,10 @@ impl Fx {
                         self.ring(now + 0.2, At::Node(n), 12.0, 60.0, t.gold, 0.9);
                     }
                 }
-                V::ResourceGained { resource, amount, .. } => {
-                    let p = readout(*resource);
-                    self.floater(ui, At::Screen(p + vec2(0.0, 68.0)), format!("+{}", fmt_num(*amount)), t.resource(*resource)).fly = Some(p + vec2(0.0, 50.0));
-                }
+                V::ResourceGained { resource, amount, .. } => match gained.iter_mut().find(|g| g.0 == *resource) {
+                    Some(g) => g.1 += *amount,
+                    None => gained.push((*resource, *amount)),
+                },
                 V::CoreAlarm { on: true } => {
                     self.ring(now, At::Node(CORE), 14.0, 80.0, t.danger, 0.9);
                     self.ring(now + 0.25, At::Node(CORE), 14.0, 80.0, t.danger, 0.9);
@@ -508,6 +510,10 @@ impl Fx {
                 }
                 _ => {}
             }
+        }
+        for (resource, amount) in gained {
+            let p = readout(resource);
+            self.floater(ui, At::Screen(p + vec2(0.0, 68.0)), format!("+{}", fmt_num(amount)), t.resource(resource)).fly = Some(p + vec2(0.0, 50.0));
         }
     }
 

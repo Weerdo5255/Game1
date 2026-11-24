@@ -364,11 +364,11 @@ pub const BREACH_OBJECTIVE: &str = "Capture the crowned Root before the Trace ru
 pub const BREACH_NO_LOOT: &str = "The routine has played: this Breach pays no loot.";
 pub const BREACH_CONTROLS: [&str; 3] = [
     "Click your host, then a linked host: open a stream.",
-    "Click a host it already streams to: cut that stream.",
+    "Click a host it streams to: cut the stream (yours: select it).",
     "Right-click your host: cut all its streams.",
 ];
 pub const BREACH_PAUSE_TIP: &str = "Pause (Space)\nThe Trace stops while the Breach is paused, and every order still goes through.";
-pub const BREACH_ROUTINE_TIP: &str = "Let the routine finish\nThe built-in routine plays the shortest path to the Root, in about a second. A Breach it has touched pays no loot.";
+pub const BREACH_ROUTINE_TIP: &str = "Let the routine finish\nThe built-in routine plays the shortest path to the Root, in about a second. A Breach it has touched pays no loot, and it can lose one you were winning.";
 pub const BREACH_ROUTINE_WARNING: &str = "No loot once the routine has played.";
 pub const BREACH_WITHDRAW_TIP: &str = "Withdraw\nEnds the Breach as lost: the commit is gone and the cooldown applies. Click twice to confirm; Esc backs out.";
 pub const BREACH_CACHE_LOST: &str = "Cache lost";
