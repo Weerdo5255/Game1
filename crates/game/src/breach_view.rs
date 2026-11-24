@@ -625,7 +625,12 @@ pub fn draw_panel(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let set_auto = Action::BreachSetAuto { on: !b.auto };
     let res = game.can_apply(&set_auto);
     if crate::panels::act_frame(ui, routine, if b.auto { "The routine is finishing it" } else { "Let the routine finish" }, "", text::BREACH_ROUTINE_TIP, &res, b.auto) {
-        let _ = game.apply(set_auto);
+        // The kept board learns of it at once: the routine can finish before another frame is drawn.
+        if game.apply(set_auto).is_ok() {
+            if let Some(last) = st.breach.last.as_mut() {
+                last.auto = !b.auto;
+            }
+        }
         st.breach.selected = None;
         // Taking the Breach back from the routine is a fresh start: stopped, at 1x.
         if b.auto {

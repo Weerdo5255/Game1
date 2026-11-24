@@ -283,6 +283,8 @@ impl Fx {
         for e in &st.events {
             use Event as V;
             match e {
+                // A refused Breach order is said beside its host by the board, not again at the pointer.
+                V::ActionRejected { .. } if self.hide_map => {}
                 V::ActionRejected { error } => {
                     let f = self.floater(ui, At::Screen(ui.input.mouse - vec2(0.0, 14.0)), text::error_text(error), t.danger);
                     f.jitter = true;
