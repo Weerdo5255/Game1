@@ -247,20 +247,22 @@ fn save_load_roundtrip_steward() {
 #[cfg_attr(debug_assertions, ignore)]
 fn breach_balance() {
     use sim::content::{BREACH_ODDS_COMMITS, BREACH_ROUTINE_ODDS};
-    let table = sim::breach::measure(1..=20);
+    let table = sim::breach::measure(1..=40);
     assert_eq!((table.len(), BREACH_ODDS_COMMITS), (5, [1.0, 1.5, 2.0, 3.0]));
-    // measured at the minimum: routine 100 / 93 / 86 / 74 / 66%, careful 100 / 96 / 94 / 91 / 94%
-    let routine_floor = [0.97, 0.90, 0.83, 0.71, 0.62];
-    let careful_floor = [0.97, 0.93, 0.90, 0.87, 0.90];
+    // The floors are the design's (SPEC 9.8), not the measurement less a margin: a different set of seeds
+    // moves a cell by several points. Measured at the minimum on seeds 1 to 40: routine
+    // 100 / 93 / 87 / 71 / 66%, careful 100 / 96 / 94 / 88 / 92%.
+    let routine_floor = [0.95, 0.80, 0.65, 0.50, 0.40];
+    let careful_floor = [0.97, 0.92, 0.85, 0.72, 0.60];
     for (l, row) in table.iter().enumerate() {
         let level = l + 1;
         let (routine, careful) = (&row[0], &row[1]);
-        assert!(routine.iter().chain(careful.iter()).all(|cell| cell.plays == 360), "level {level}: 18 nodes x 20 seeds");
+        assert!(routine.iter().chain(careful.iter()).all(|cell| cell.plays == 720), "level {level}: 18 nodes x 40 seeds");
         let rate = |cells: &[sim::breach::Measured; 4]| -> Vec<f64> { cells.iter().map(|cell| cell.win_rate()).collect() };
         let (r, c) = (rate(routine), rate(careful));
         assert!(r[0] >= routine_floor[l], "level {level}: routine at the minimum wins {:.3}", r[0]);
-        // measured: at least 96% at 2 x and 99% at 3 x
-        assert!(r[2] >= 0.94 && r[3] >= 0.98, "level {level}: routine at 2 x and 3 x wins {:.3} and {:.3}", r[2], r[3]);
+        // measured: at least 95.8% at 2 x and 98.5% at 3 x (level 4 is the low cell of both)
+        assert!(r[2] >= 0.93 && r[3] >= 0.97, "level {level}: routine at 2 x and 3 x wins {:.3} and {:.3}", r[2], r[3]);
         assert!(c[0] >= careful_floor[l], "level {level}: careful at the minimum wins {:.3}", c[0]);
         assert!(c[0] >= r[0], "level {level}: skill is worth at least the routine ({:.3} against {:.3})", c[0], r[0]);
         for i in 0..4 {
@@ -268,12 +270,12 @@ fn breach_balance() {
             // pace: measured at least 92% of a careful win's ticks with a stream open
             assert!(careful[i].mean_stream_share() >= 0.88, "level {level}, {} x: a stream open {:.3} of the time", BREACH_ODDS_COMMITS[i], careful[i].mean_stream_share());
         }
-        // loot: measured 20 / 46 / 45% of the Caches held at the minimum and 82 / 84 / 94% at 3 x (levels 3 to 5)
+        // loot: measured 20 / 45 / 44% of the Caches held at the minimum and 82 / 85 / 94% at 3 x (levels 3 to 5)
         if level >= 3 {
             assert!(careful[0].cache_share() <= 0.50, "level {level}: {:.3} of the Caches held at the minimum", careful[0].cache_share());
             assert!(careful[3].cache_share() >= 0.80, "level {level}: {:.3} of the Caches held at 3 x", careful[3].cache_share());
         }
-        // pace: the median careful win at the minimum, measured 15.6 / 26.4 / 33.4 / 48.9 / 49.4 s
+        // pace: the median careful win at the minimum, measured 15.7 / 25.9 / 33.0 / 48.9 / 49.8 s
         let median = careful[0].median_secs();
         if level <= 3 {
             assert!((15.0..=45.0).contains(&median), "level {level}: a careful win takes {median} s");

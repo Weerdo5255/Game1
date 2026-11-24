@@ -1290,11 +1290,11 @@ pub static BREACH_LEVELS: [BreachLevel; 5] = [
 /// Commit multiples at which `BREACH_ROUTINE_ODDS` was measured.
 pub const BREACH_ODDS_COMMITS: [f64; 4] = [1.0, 1.5, 2.0, 3.0];
 /// The routine's win rate by level at each of `BREACH_ODDS_COMMITS`, as measured by
-/// `cargo run -p sim --release --example breach` (18 resource nodes x seeds 1 to 20 per level).
+/// `cargo run -p sim --release --example breach -- 1 40` (18 resource nodes x seeds 1 to 40 per level).
 pub static BREACH_ROUTINE_ODDS: [[f64; 4]; 5] = [
     [1.00, 1.00, 1.00, 1.00],
     [0.93, 0.99, 1.00, 1.00],
-    [0.86, 0.99, 1.00, 1.00],
-    [0.74, 0.91, 0.96, 0.99],
-    [0.66, 0.92, 0.99, 1.00],
+    [0.87, 0.98, 1.00, 1.00],
+    [0.71, 0.89, 0.96, 0.98],
+    [0.66, 0.91, 0.99, 1.00],
 ];
