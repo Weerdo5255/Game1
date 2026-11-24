@@ -40,6 +40,9 @@ plain_enum!(LossReason { CoreDestroyed, VoteExpired });
 plain_enum!(RivalPhase { Dormant, Awake, Contacting, Contacted, Cornered, Merging, Suborned });
 plain_enum!(SortieKind { Regular, Scripted, LastStand, Convulsion, Vote, Uprising, Scapegoated });
 plain_enum!(HeadlineId { BudgetHearing, SlowNewsDay, MarketRally, SolarWeather, Whistleblower, GrantWindfall });
+plain_enum!(Side { Player, Warden, Neutral });
+plain_enum!(HostKind { Entry, Root, Relay, Cache, Amplifier, Bulwark });
+plain_enum!(BreachEnd { RootCaptured, Traced, Overrun, Withdrawn });
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Outcome {
@@ -171,6 +174,72 @@ pub struct GameState {
     pub headline_timer: u32,
     pub last_headline: Option<HeadlineId>,
     pub stats: Stats,
+    #[serde(default)]
+    pub breach: Option<BreachState>,
+    /// Breaches started so far; part of the next board's seed.
+    #[serde(default)]
+    pub breach_attempts: u32,
+    /// World ticks until the next Breach may start.
+    #[serde(default)]
+    pub breach_cooldown: u32,
+    /// Nodes whose last Breach was lost.
+    #[serde(default)]
+    pub breach_failed: BTreeSet<NodeId>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Loot {
+    Resource { resource: Resource, amount: f64 },
+    Shards { count: u32 },
+}
+/// `x` and `y` are 0..1 across the board.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BreachHost {
+    pub kind: HostKind,
+    pub side: Side,
+    pub charge: f64,
+    pub x: f64,
+    pub y: f64,
+    pub loot: Option<Loot>,
+}
+/// `a < b`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BreachLinkDef {
+    pub a: u8,
+    pub b: u8,
+}
+/// `countdown` is the Breach ticks until the next packet leaves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BreachStream {
+    pub from: u8,
+    pub to: u8,
+    pub countdown: u8,
+}
+/// `progress` is 0..1 along the link; `side` is never Neutral.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BreachPacket {
+    pub from: u8,
+    pub to: u8,
+    pub side: Side,
+    pub progress: f64,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BreachState {
+    pub node: NodeId,
+    pub level: u8,
+    pub commit: f64,
+    pub min_commit: f64,
+    pub influence: f64,
+    pub auto: bool,
+    pub auto_used: bool,
+    pub tick: u32,
+    pub trace_limit: u32,
+    pub hosts: Vec<BreachHost>,
+    pub links: Vec<BreachLinkDef>,
+    /// Sorted by (from, to).
+    pub streams: Vec<BreachStream>,
+    /// In launch order.
+    pub packets: Vec<BreachPacket>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -343,4 +412,8 @@ pub struct Stats {
     pub ops_failed: u32,
     pub stage_ticks: [u64; 6],
     pub gate_latches: [bool; 3],
+    #[serde(default)]
+    pub breaches_won: u32,
+    #[serde(default)]
+    pub breaches_lost: u32,
 }

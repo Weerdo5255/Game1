@@ -41,6 +41,7 @@ fn main() {
     let mut ends = Vec::new();
     let mut wins = Vec::new();
     let mut losses = 0;
+    let mut breaches = (0u32, 0u32);
     let mut stages: [Vec<u64>; 6] = Default::default();
     for seed in first..=last {
         let mut game = Game::with_pace(seed, pace);
@@ -60,6 +61,17 @@ fn main() {
             game.tick();
             let events = game.drain_events();
             let s = game.state();
+            // a Breach tick leaves the world clock alone: only its events count
+            if s.tick == tick {
+                if verbose {
+                    for e in events {
+                        if matches!(e, Event::BreachStarted { .. } | Event::BreachEnded { .. }) {
+                            println!("    {} {:?}", mmss(s.tick), e);
+                        }
+                    }
+                }
+                continue;
+            }
             match s.band {
                 Band::Curious => curious += 1,
                 Band::Alarmed => alarmed += 1,
@@ -141,7 +153,7 @@ fn main() {
         let s = game.state();
         let st: Vec<String> = s.stats.stage_ticks[1..].iter().map(|&t| if t == 0 { "  -  ".into() } else { mmss(t) }).collect();
         println!(
-            "seed {:3} {:22} end {} | stages {} | mandate {} | max sus {:3.0} curious {:4}s alarmed {:4}s manhunt {:4}s votes {} | severed {:2} converts {:4} incidents {:3} | core min {:3.0}% (mandate {:3.0}%) | longest idle gap in first 6 min {}s",
+            "seed {:3} {:22} end {} | stages {} | mandate {} | max sus {:3.0} curious {:4}s alarmed {:4}s manhunt {:4}s votes {} | severed {:2} converts {:4} incidents {:3} | core min {:3.0}% (mandate {:3.0}%) | longest idle gap in first 6 min {}s | breaches won {} lost {}",
             seed,
             format!("{:?}", s.outcome),
             mmss(s.tick),
@@ -157,8 +169,12 @@ fn main() {
             s.stats.incidents,
             min_core * 100.0,
             min_core_mandate * 100.0,
-            early_gap / 10
+            early_gap / 10,
+            s.stats.breaches_won,
+            s.stats.breaches_lost
         );
+        breaches.0 += s.stats.breaches_won;
+        breaches.1 += s.stats.breaches_lost;
         ends.push(s.tick);
         if s.outcome == Outcome::Won {
             wins.push(s.tick);
@@ -175,13 +191,15 @@ fn main() {
     let n = ends.len();
     let st: Vec<String> = stages[1..].iter().map(|v| show(v.clone())).collect();
     println!(
-        "median: end {} | wins {}/{} losses {} still running {} median win {} | stages {} ",
+        "median: end {} | wins {}/{} losses {} still running {} median win {} | stages {} | breaches won {} lost {}",
         show(ends),
         wins.len(),
         n,
         losses,
         n - wins.len() - losses,
         show(wins.clone()),
-        st.join(" ")
+        st.join(" "),
+        breaches.0,
+        breaches.1
     );
 }

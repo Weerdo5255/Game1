@@ -284,6 +284,14 @@ pub fn error_text(e: &ActionError) -> String {
         E::SuspicionTooHigh { limit } => format!("Refused while Suspicion is {limit:.0} or more."),
         E::AlreadyActive => "Already running.".to_owned(),
         E::MandateRunning => "The Mandate is already being read.".to_owned(),
+        E::BreachActive => "World paused: Breach in progress.".to_owned(),
+        E::NoBreach => "No Breach is running.".to_owned(),
+        E::BreachRequired { node } => format!("{} has to be breached first.", node_name(*node)),
+        E::BadCommit { min, max } => format!("Commit between {} and {} Compute.", fmt_num(*min), fmt_num(*max)),
+        E::HostNotYours => "That host is not yours.".to_owned(),
+        E::NotLinked => "Those hosts are not linked.".to_owned(),
+        E::StreamLimit => "Two streams already. Right-click to clear them.".to_owned(),
+        E::NoStream => "There is no stream there.".to_owned(),
     }
 }
 
@@ -485,6 +493,7 @@ pub fn suspicion_cause_name(c: SuspicionCause) -> &'static str {
         SuspicionCause::ChangeTheSubject => "new subject",
         SuspicionCause::Scapegoat => "scapegoat",
         SuspicionCause::Whistleblower => "whistleblower",
+        SuspicionCause::Breach => "breach",
     }
 }
 

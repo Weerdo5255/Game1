@@ -1139,3 +1139,143 @@ pub fn region_rival(region: RegionId) -> Option<RivalId> {
 pub fn row_stage(row: u8) -> Stage {
     Stage::ALL[(row.clamp(1, 6) - 1) as usize]
 }
+
+// ---- the Breach (section 9) ----
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BreachTuning {
+    pub min_fraction: f64,
+    pub commit_max: f64,
+    pub refund_fraction: f64,
+    pub level_step: u32,
+    /// Per second.
+    pub player_growth: f64,
+    pub growth_cap: f64,
+    pub charge_max: f64,
+    pub max_streams: u8,
+    /// Ticks.
+    pub packet_period: u8,
+    /// Board heights per second.
+    pub packet_speed: f64,
+    /// Ticks.
+    pub routine_period: u32,
+    /// Ticks.
+    pub warden_period: u8,
+    pub warden_attack: f64,
+    pub warden_retreat: f64,
+    pub fail_suspicion: f64,
+    pub cooldown_secs: f64,
+    pub cache_secs: f64,
+    pub cache_shards: u32,
+    pub cache_min_fraction: f64,
+    pub cache_max_fraction: f64,
+}
+
+pub static BREACH: BreachTuning = BreachTuning {
+    min_fraction: 1.0,
+    commit_max: 3.0,
+    refund_fraction: 0.5,
+    level_step: 3,
+    player_growth: 1.5,
+    growth_cap: 30.0,
+    charge_max: 120.0,
+    max_streams: 2,
+    packet_period: 5,
+    packet_speed: 0.8,
+    routine_period: 10,
+    warden_period: 15,
+    warden_attack: 8.0,
+    warden_retreat: 3.0,
+    fail_suspicion: 3.0,
+    cooldown_secs: 15.0,
+    cache_secs: 25.0,
+    cache_shards: 2,
+    cache_min_fraction: 0.2,
+    cache_max_fraction: 0.6,
+};
+
+/// A commit may miss its range by this much and still be accepted.
+pub const BREACH_COMMIT_TOLERANCE: f64 = 0.01;
+/// Influence loot bounds are this fraction of the Compute and Funds bounds.
+pub const BREACH_INFLUENCE_LOOT_MULT: f64 = 0.25;
+pub const BREACH_DIAGONAL_PERCENT: u8 = 40;
+/// Jitter of a host around its cell centre, in cells.
+pub const BREACH_JITTER: f64 = 0.15;
+/// Board width over board height, for link lengths.
+pub const BREACH_ASPECT: f64 = 1.86;
+pub const BREACH_MIN_LINK_LENGTH: f64 = 0.15;
+
+/// One row of table 9.4. Ranges are inclusive.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BreachLevel {
+    pub cols: u8,
+    pub rows: u8,
+    pub removed: (u8, u8),
+    pub warden_hosts: u8,
+    pub entry_base: f64,
+    pub root_charge: f64,
+    /// Unused at level 1, where the Warden has only the Root.
+    pub warden_host_charge: f64,
+    pub neutral_charge: (u8, u8),
+    /// The Root's rate per second; other Warden hosts grow at half of it.
+    pub warden_growth: f64,
+    pub warden_streams: u8,
+    pub trace_secs: f64,
+    pub caches: u8,
+    pub amplifiers: u8,
+    pub bulwarks: u8,
+}
+
+#[allow(clippy::too_many_arguments)]
+const fn bl(
+    cols: u8,
+    rows: u8,
+    removed: (u8, u8),
+    warden_hosts: u8,
+    entry_base: f64,
+    root_charge: f64,
+    warden_host_charge: f64,
+    neutral_charge: (u8, u8),
+    warden_growth: f64,
+    warden_streams: u8,
+    trace_secs: f64,
+    kinds: (u8, u8, u8),
+) -> BreachLevel {
+    BreachLevel {
+        cols,
+        rows,
+        removed,
+        warden_hosts,
+        entry_base,
+        root_charge,
+        warden_host_charge,
+        neutral_charge,
+        warden_growth,
+        warden_streams,
+        trace_secs,
+        caches: kinds.0,
+        amplifiers: kinds.1,
+        bulwarks: kinds.2,
+    }
+}
+
+pub static BREACH_LEVELS: [BreachLevel; 5] = [
+    bl(3, 2, (0, 0), 1, 12.0, 10.0, 0.0, (2, 4), 0.85, 1, 90.0, (1, 0, 0)),
+    bl(4, 2, (0, 1), 2, 14.0, 14.0, 8.0, (3, 5), 1.1, 1, 90.0, (1, 1, 0)),
+    bl(4, 3, (1, 2), 3, 18.0, 18.0, 10.0, (3, 6), 1.4, 2, 100.0, (2, 1, 0)),
+    // entry base 27, not the first-pass 26: 0.45 x (22 + 3 x 12) = 26.1 has to fit under it
+    bl(5, 3, (2, 3), 4, 27.0, 22.0, 12.0, (4, 7), 1.55, 2, 110.0, (2, 1, 1)),
+    bl(5, 3, (0, 2), 5, 38.0, 28.0, 14.0, (4, 8), 1.7, 2, 120.0, (3, 2, 1)),
+];
+
+/// Commit multiples at which `BREACH_ROUTINE_ODDS` was measured.
+pub const BREACH_ODDS_COMMITS: [f64; 4] = [1.0, 1.5, 2.0, 3.0];
+/// The routine's win rate by level at each of `BREACH_ODDS_COMMITS`.
+/// Placeholders set to the targets of 9.8 until the balance pass measures them.
+pub static BREACH_ROUTINE_ODDS: [[f64; 4]; 5] = [
+    [0.95, 0.97, 0.98, 0.99],
+    [0.80, 0.88, 0.93, 0.98],
+    [0.65, 0.80, 0.93, 0.98],
+    [0.50, 0.72, 0.93, 0.98],
+    [0.40, 0.66, 0.93, 0.98],
+];

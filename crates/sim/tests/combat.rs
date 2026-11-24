@@ -58,7 +58,7 @@ fn first_minute_opening_by_hand() {
             let _ = g.apply(gaslight(u.id));
         }
         let _ = g.apply(Action::StartResearch { tech: TechId::R1 });
-        let _ = g.apply(Action::Infiltrate { node: NodeId(1) });
+        let _ = infiltrate(&mut g, NodeId(1));
         g.tick();
         let t = g.state().tick;
         for e in g.drain_events() {
@@ -559,7 +559,7 @@ fn severed_node() {
     g.apply(Action::Infiltrate { node: NodeId(2) }).unwrap();
     let after = g.state().resources;
     assert_eq!((before.compute - after.compute, before.funds - after.funds, before.influence - after.influence), (50.0, 0.0, 13.0));
-    assert_eq!(g.can_apply(&Action::Infiltrate { node: NodeId(10) }), Err(ActionError::InfiltrationBusy));
+    assert_eq!(g.breach_startable(NodeId(10)), Err(ActionError::InfiltrationBusy));
     let events = run(&mut g, 100);
     let gained: Vec<u64> = events.iter().filter(|(_, e)| *e == Event::NodeGained { node: NodeId(2), cause: GainCause::Retaken }).map(|x| x.0).collect();
     assert_eq!(gained, vec![102]);
@@ -576,7 +576,10 @@ fn severed_node() {
     assert_eq!(g.infiltration_cost(NodeId(10)), Resources::new(101.0, 0.0, 25.0));
     assert_eq!(g.infiltration_cost(NodeId(5)), Resources::new(151.0, 0.0, 38.0));
     assert_eq!(g.infiltration_secs(NodeId(5)), 12.0);
-    g.apply(Action::Infiltrate { node: NodeId(5) }).unwrap();
+    let before = g.state().resources;
+    infiltrate(&mut g, NodeId(5)).unwrap();
+    let after = g.state().resources;
+    assert_eq!((before.compute - after.compute, before.funds - after.funds, before.influence - after.influence), (151.0, 0.0, 38.0));
     let events = run(&mut g, 120);
     assert!(events.iter().any(|(t, e)| *t == 222 && *e == Event::NodeGained { node: NodeId(5), cause: GainCause::Infiltrated }));
     assert!(events.iter().any(|(_, e)| matches!(e, Event::SuspicionChanged { delta, cause: SuspicionCause::Infiltration } if approx(*delta, 2.0))));

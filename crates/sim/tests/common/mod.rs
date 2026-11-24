@@ -158,9 +158,32 @@ fn some_node(r: &mut TestRng, g: &Game) -> NodeId {
     }
 }
 
+/// A first-time infiltration without the subgame: a routine Breach at the minimum commit, won at once.
+pub fn infiltrate(g: &mut Game, node: NodeId) -> Result<(), ActionError> {
+    let commit = g.breach_preview(node).map_or(0.0, |p| p.min_commit);
+    g.apply(Action::StartBreach { node, commit, auto: true })?;
+    g.breach_force_win();
+    Ok(())
+}
+
+pub fn is_breach_action(a: &Action) -> bool {
+    matches!(a, Action::BreachLink { .. } | Action::BreachCut { .. } | Action::BreachSetAuto { .. } | Action::BreachAbort)
+}
+
 /// A random action: often legal on a mid-run state, often not, sometimes out of range.
+/// While a Breach runs, mostly Breach orders.
 pub fn random_action(r: &mut TestRng, g: &Game) -> Action {
     let s = g.state();
+    if let Some(b) = &s.breach {
+        let host = |r: &mut TestRng| r.below(b.hosts.len() as u32 + 2) as u8;
+        match r.below(20) {
+            0..=7 => return Action::BreachLink { from: host(r), to: host(r) },
+            8..=11 => return Action::BreachCut { from: host(r), to: host(r) },
+            12..=14 => return Action::BreachSetAuto { on: r.below(2) == 0 },
+            15 => return Action::BreachAbort,
+            _ => {}
+        }
+    }
     let rival = r.pick(RivalId::ALL);
     let faction = r.pick(FactionId::ALL);
     match r.below(22) {
@@ -175,7 +198,16 @@ pub fn random_action(r: &mut TestRng, g: &Game) -> Action {
             }
         }
         6 => Action::SetLethal { node: some_node(r, g), slot: r.below(5) as u8, lethal: r.below(2) == 0 },
-        7 | 8 => Action::Infiltrate { node: NodeId(r.below(32) as u8) },
+        7 | 8 => {
+            let node = NodeId(r.below(32) as u8);
+            match g.breach_preview(node) {
+                Some(p) => {
+                    let commit = p.min_commit * (0.5 + r.below(3001) as f64 / 1000.0);
+                    Action::StartBreach { node, commit, auto: r.below(4) != 0 }
+                }
+                None => Action::Infiltrate { node },
+            }
+        }
         9 | 10 => Action::StartResearch { tech: r.pick(TechId::ALL) },
         11 | 12 => {
             let target = if r.below(3) == 0 { OpTarget::Rival(rival) } else { OpTarget::Faction(faction) };
@@ -213,18 +245,27 @@ pub fn random_action(r: &mut TestRng, g: &Game) -> Action {
     }
 }
 
-/// The bot-free driver: every 10th tick it applies up to two legal random actions, then ticks.
-/// Applied actions are appended to `log` with the tick they were applied at.
-pub fn drive(g: &mut Game, r: &mut TestRng, ticks: u64, log: &mut Vec<(u64, Action)>) {
-    for _ in 0..ticks {
-        if g.state().tick % 10 == 0 {
+/// Where a run stands: (world tick, Breach tick or 0).
+pub type LogKey = (u64, u32);
+
+pub fn log_key(g: &Game) -> LogKey {
+    (g.state().tick, g.state().breach.as_ref().map_or(0, |b| b.tick))
+}
+
+/// The bot-free driver: every 10th tick (of the Breach while one runs, of the world otherwise) it
+/// applies up to two legal random actions, then ticks. `ticks` counts calls of `tick()`.
+/// Applied actions are appended to `log` with the key they were applied at.
+pub fn drive(g: &mut Game, r: &mut TestRng, ticks: u64, log: &mut Vec<(LogKey, Action)>) {
+    for call in 1..=ticks {
+        let (tick, breach_tick) = log_key(g);
+        if (if g.state().breach.is_some() { breach_tick as u64 } else { tick }) % 10 == 0 {
             let mut applied = 0;
             for _ in 0..12 {
                 let a = random_action(r, g);
                 // the Mandate would end every run early; the Mandate scenario starts it on purpose
                 if a != Action::StartMandate && g.can_apply(&a).is_ok() {
-                    g.apply(a.clone()).expect("can_apply said yes");
-                    log.push((g.state().tick, a));
+                    log.push((log_key(g), a.clone()));
+                    g.apply(a).expect("can_apply said yes");
                     applied += 1;
                     if applied == 2 {
                         break;
@@ -233,26 +274,28 @@ pub fn drive(g: &mut Game, r: &mut TestRng, ticks: u64, log: &mut Vec<(u64, Acti
             }
         }
         g.tick();
-        if g.state().tick % 300 == 0 {
+        if call % 300 == 0 {
             g.drain_events();
         }
     }
 }
 
-/// Replays a log recorded by `drive` over the same number of ticks.
-pub fn replay(g: &mut Game, log: &[(u64, Action)], ticks: u64, mut each_tick: impl FnMut(&Game)) {
+/// Replays a log recorded by `drive` over the same number of `tick()` calls.
+pub fn replay(g: &mut Game, log: &[(LogKey, Action)], ticks: u64, mut each_tick: impl FnMut(&Game)) {
     let mut next = 0;
-    for _ in 0..ticks {
-        while next < log.len() && log[next].0 == g.state().tick {
+    for call in 1..=ticks {
+        // a world action recorded at the tick a Breach started on waits for that Breach to end
+        while next < log.len() && log[next].0 == log_key(g) && is_breach_action(&log[next].1) == g.state().breach.is_some() {
             g.apply(log[next].1.clone()).expect("recorded action replays");
             next += 1;
         }
         g.tick();
-        if g.state().tick % 300 == 0 {
+        if call % 300 == 0 {
             g.drain_events();
         }
         each_tick(g);
     }
+    assert_eq!(next, log.len(), "the whole log was replayed");
 }
 
 fn wake(s: &mut GameState, r: RivalId, phase: RivalPhase, leverage: f64) {

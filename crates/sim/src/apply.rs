@@ -1,4 +1,5 @@
 use crate::actions::{self, Action, ActionError};
+use crate::breach;
 use crate::calc;
 use crate::content::*;
 use crate::events::*;
@@ -133,6 +134,13 @@ pub(crate) fn perform(game: &mut Game, action: Action) {
             if game.state.band != Band::ShutdownVote {
                 game.state.band = Band::ShutdownVote;
                 game.events.push(Event::BandChanged { band: Band::ShutdownVote });
+            }
+        }
+        Action::StartBreach { node, commit, auto } => breach::start(game, node, commit, auto),
+        Action::BreachAbort => breach::finish(game, BreachEnd::Withdrawn),
+        Action::BreachLink { .. } | Action::BreachCut { .. } | Action::BreachSetAuto { .. } => {
+            if let Some(b) = s.breach.as_mut() {
+                breach::perform(b, &action);
             }
         }
     }

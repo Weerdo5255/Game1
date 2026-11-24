@@ -120,11 +120,7 @@ fn conf() -> Conf {
 
 fn step(game: &mut Game, bot: &mut Option<Bot>) {
     if let Some(bot) = bot {
-        if game.state().tick % 10 == 0 {
-            for action in bot.decide(game) {
-                let _ = game.apply(action);
-            }
-        }
+        bot.take_turn(game);
     }
     game.tick();
 }

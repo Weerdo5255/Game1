@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 plain_enum!(SuspicionCause {
     Infiltration, Story, Incident, FailedOp, Convert, PlayDumb, MurmurFlattery, ChangeTheSubject, Scapegoat,
-    Whistleblower
+    Whistleblower, Breach
 });
 plain_enum!(GripCause { Operation, FailedOp, Convert, TakeoverFailed });
 plain_enum!(LeverageCause { Flatter, Bribe, Shards, Scapegoat, Lapse, MergeFailed });
@@ -71,6 +71,23 @@ pub enum Event {
     UprisingWave { wave: u8 },
     ResourceGained { resource: Resource, amount: f64, ability: Option<AbilityId>, headline: Option<HeadlineId> },
     CoreAlarm { on: bool },
+    BreachStarted { node: NodeId, level: u8, commit: f64, auto: bool, entry_charge: u32 },
+    BreachHostCaptured { host: u8, side: Side, kind: HostKind },
+    BreachEnded {
+        node: NodeId,
+        level: u8,
+        won: bool,
+        reason: BreachEnd,
+        secs: f64,
+        commit: f64,
+        influence: f64,
+        refund: f64,
+        loot: Vec<Loot>,
+        caches_held: u8,
+        caches_total: u8,
+        auto_used: bool,
+        root_charge: f64,
+    },
     GameWon,
     GameLost { reason: LossReason },
 }

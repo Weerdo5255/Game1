@@ -7,11 +7,13 @@ use crate::{Game, TechStatus};
 
 plain_enum!(BotKind { Steward, Idle, NoDefence, Glutton });
 
-/// Stateless: every plan position is recomputed from `&Game`.
+/// Every plan position is recomputed from `&Game`; the bot only remembers when it last took a turn.
 #[derive(Clone)]
 pub struct Bot {
     pub kind: BotKind,
     pub handicap: Handicap,
+    /// The world tick of the last turn, so a Breach that ends on that tick does not earn a second one.
+    last_turn: Option<u64>,
 }
 
 /// A slower or sloppier hand on the same plan, for measuring how forgiving the balance is.
@@ -61,6 +63,11 @@ const RESEARCH_ORDER: [TechId; 15] = [
 ];
 const INFIL_ORDER: [u8; 18] = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 17, 20, 21, 22, 25, 26, 27];
 const ECONOMY: [BuildingKind; 3] = [BuildingKind::ShadowCluster, BuildingKind::ShellCompany, BuildingKind::PersonaFarm];
+/// The Steward's commit, as a multiple of the minimum: normally, and on a node whose last Breach was lost.
+const BREACH_COMMIT: f64 = 1.5;
+const BREACH_RETRY_COMMIT: f64 = 3.0;
+/// A node whose last Breach was lost is left alone while Suspicion is this high.
+const BREACH_RETRY_SUSPICION: f64 = 70.0;
 /// A research of row 3 or later is saved for once current Compute income would cover the shortfall within this long.
 const RESEARCH_SAVE_SECS: f64 = 240.0;
 const ECONOMY_WEIGHT: [f64; 3] = [1.0, 1.0, 0.4];
@@ -102,20 +109,22 @@ fn ability(g: &Game, ability: AbilityId, target: AbilityTarget) -> Option<Action
 
 impl Bot {
     pub fn new(kind: BotKind) -> Bot {
-        Bot { kind, handicap: Handicap::default() }
+        Bot::with_handicap(kind, Handicap::default())
     }
 
     pub fn with_handicap(kind: BotKind, handicap: Handicap) -> Bot {
-        Bot { kind, handicap }
+        Bot { kind, handicap, last_turn: None }
     }
 
     /// Call every tick before `Game::tick`: on a turn tick, decides and applies up to `burst` actions.
     pub fn take_turn(&mut self, game: &mut Game) -> Vec<Action> {
         let mut done = Vec::new();
-        if game.state.tick % self.handicap.period_ticks.max(1) != 0 {
+        let tick = game.state.tick;
+        if game.state.breach.is_some() || self.last_turn == Some(tick) || tick % self.handicap.period_ticks.max(1) != 0 {
             return done;
         }
-        while (done.len() as u32) < self.handicap.burst {
+        self.last_turn = Some(tick);
+        while (done.len() as u32) < self.handicap.burst && game.state.breach.is_none() {
             let actions = self.decide(game);
             if actions.is_empty() {
                 break;
@@ -130,10 +139,14 @@ impl Bot {
 
     /// Call when `state.tick % 10 == 0`; returns 0..=2 actions.
     pub fn decide(&mut self, game: &Game) -> Vec<Action> {
-        if self.kind == BotKind::Idle || game.state.outcome != Outcome::Running {
+        if self.kind == BotKind::Idle || game.state.outcome != Outcome::Running || game.state.breach.is_some() {
             return Vec::new();
         }
         let Some(first) = self.next_action(game) else { return Vec::new() };
+        // the world stops for a Breach, so it ends the turn
+        if matches!(first, Action::StartBreach { .. }) {
+            return vec![first];
+        }
         let mut scratch = game.clone();
         scratch.events.clear();
         if scratch.apply(first.clone()).is_err() {
@@ -497,11 +510,21 @@ fn infiltrate(g: &Game) -> Option<Action> {
     let severed = (0..s.nodes.len() as u8).map(NodeId).filter(|n| s.nodes[n.index()].severed);
     let ordered = INFIL_ORDER.iter().map(|&n| NodeId(n)).filter(|n| s.nodes[n.index()].owner == Owner::Neutral);
     let compliant = (0..s.nodes.len() as u8).map(NodeId).filter(|n| s.nodes[n.index()].compliant);
-    severed
-        .chain(ordered)
-        .chain(compliant)
-        .filter(|&node| s.nodes[node.index()].severed || spares(s, calc::infiltration_cost(s, node)))
-        .find_map(|node| ok(g, Action::Infiltrate { node }))
+    severed.chain(ordered).chain(compliant).find_map(|node| {
+        if !calc::needs_breach(s, node) {
+            return (s.nodes[node.index()].severed || spares(s, calc::infiltration_cost(s, node)))
+                .then(|| ok(g, Action::Infiltrate { node }))
+                .flatten();
+        }
+        // a first-time node is breached by the routine
+        let failed = s.breach_failed.contains(&node);
+        if (failed && s.suspicion >= BREACH_RETRY_SUSPICION) || g.breach_startable(node).is_err() {
+            return None;
+        }
+        let min = calc::breach_commit_range(s, node).0;
+        let commit = (if failed { BREACH_RETRY_COMMIT } else { BREACH_COMMIT } * min).min(s.resources.compute);
+        spares(s, Resources::of(Resource::Compute, commit)).then(|| ok(g, Action::StartBreach { node, commit, auto: true })).flatten()
+    })
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -521,10 +544,13 @@ pub fn run_handicapped(seed: u64, kind: BotKind, handicap: Handicap, pace: f64, 
     let mut game = Game::with_pace(seed, pace);
     let mut bot = Bot::with_handicap(kind, handicap);
     let max_ticks = max_minutes as u64 * 600;
+    // the world clock bounds the run: Breach ticks do not advance it
+    let mut calls = 0u64;
     while game.state.outcome == Outcome::Running && game.state.tick < max_ticks {
         bot.take_turn(&mut game);
         game.tick();
-        if game.state.tick % 300 == 0 {
+        calls += 1;
+        if calls % 300 == 0 {
             game.events.clear();
         }
     }

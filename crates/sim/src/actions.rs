@@ -1,3 +1,4 @@
+use crate::breach;
 use crate::calc::{self, LinkAccess};
 use crate::content::*;
 use crate::state::*;
@@ -21,6 +22,11 @@ pub enum Action {
     Offer { rival: RivalId },
     UseAbility { ability: AbilityId, target: AbilityTarget },
     StartMandate,
+    StartBreach { node: NodeId, commit: f64, auto: bool },
+    BreachLink { from: u8, to: u8 },
+    BreachCut { from: u8, to: u8 },
+    BreachSetAuto { on: bool },
+    BreachAbort,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -59,6 +65,14 @@ pub enum ActionError {
     SuspicionTooHigh { limit: f64 },
     AlreadyActive,
     MandateRunning,
+    BreachActive,
+    NoBreach,
+    BreachRequired { node: NodeId },
+    BadCommit { min: f64, max: f64 },
+    HostNotYours,
+    NotLinked,
+    StreamLimit,
+    NoStream,
 }
 
 use ActionError as E;
@@ -130,6 +144,22 @@ fn pipeline_unlocked(s: &GameState) -> Check {
     need_tech(s, TechId::S2)
 }
 
+/// The structural checks shared by `Infiltrate` and `StartBreach`, up to and including Neutral.
+fn infiltration_target(s: &GameState, node: NodeId) -> Check {
+    node_exists(s, node)?;
+    need_stage(s, Stage::Leak)?;
+    need_tech(s, TechId::R1)?;
+    match calc::link_access(s, node) {
+        LinkAccess::NoLink => return Err(E::NodeNotReachable { node }),
+        LinkAccess::Locked(tech) => return Err(E::TrunkLocked { tech }),
+        LinkAccess::Open => {}
+    }
+    if s.nodes[node.index()].owner != Owner::Neutral {
+        return Err(E::NotInfiltratable { node });
+    }
+    Ok(())
+}
+
 fn verb(s: &GameState, rival: RivalId, verb: Verb) -> Check {
     pipeline_unlocked(s)?;
     let r = &s.rivals[rival.index()];
@@ -153,6 +183,13 @@ fn verb(s: &GameState, rival: RivalId, verb: Verb) -> Check {
 pub(crate) fn validate(s: &GameState, action: &Action) -> Check {
     if s.outcome != Outcome::Running {
         return Err(E::GameOver);
+    }
+    let in_breach = matches!(action, Action::BreachLink { .. } | Action::BreachCut { .. } | Action::BreachSetAuto { .. } | Action::BreachAbort);
+    match &s.breach {
+        Some(b) if in_breach => return breach::validate(b, action),
+        Some(_) => return Err(E::BreachActive),
+        None if in_breach => return Err(E::NoBreach),
+        None => {}
     }
     match *action {
         Action::Build { node, slot, kind } => {
@@ -203,21 +240,29 @@ pub(crate) fn validate(s: &GameState, action: &Action) -> Check {
             }
         }
         Action::Infiltrate { node } => {
-            node_exists(s, node)?;
-            need_stage(s, Stage::Leak)?;
-            need_tech(s, TechId::R1)?;
-            match calc::link_access(s, node) {
-                LinkAccess::NoLink => return Err(E::NodeNotReachable { node }),
-                LinkAccess::Locked(tech) => return Err(E::TrunkLocked { tech }),
-                LinkAccess::Open => {}
-            }
-            if s.nodes[node.index()].owner != Owner::Neutral {
-                return Err(E::NotInfiltratable { node });
+            infiltration_target(s, node)?;
+            if calc::needs_breach(s, node) {
+                return Err(E::BreachRequired { node });
             }
             if s.infiltration.is_some() {
                 return Err(E::InfiltrationBusy);
             }
             afford(s, &calc::infiltration_cost(s, node))
+        }
+        Action::StartBreach { node, commit, .. } => {
+            infiltration_target(s, node)?;
+            if !calc::needs_breach(s, node) {
+                return Err(E::NotInfiltratable { node });
+            }
+            if s.infiltration.is_some() {
+                return Err(E::InfiltrationBusy);
+            }
+            off_cooldown(s.breach_cooldown)?;
+            let (min, max) = calc::breach_commit_range(s, node);
+            if !commit.is_finite() || commit < min - BREACH_COMMIT_TOLERANCE || commit > max + BREACH_COMMIT_TOLERANCE {
+                return Err(E::BadCommit { min, max });
+            }
+            afford(s, &Resources::new(commit, 0.0, calc::infiltration_cost(s, node).influence))
         }
         Action::StartResearch { tech } => {
             let def = &TECHS[tech.index()];
@@ -351,5 +396,7 @@ pub(crate) fn validate(s: &GameState, action: &Action) -> Check {
             }
             afford(s, &calc::mandate_cost(s))
         }
+        // handled above: a Breach action never reaches the world's rules
+        Action::BreachLink { .. } | Action::BreachCut { .. } | Action::BreachSetAuto { .. } | Action::BreachAbort => Err(E::NoBreach),
     }
 }

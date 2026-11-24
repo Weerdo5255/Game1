@@ -13,11 +13,7 @@ fn secs(m: u64, s: u64) -> u64 {
 
 /// One tick of a bot-driven run, exactly as `run_bot` does it.
 fn step(g: &mut Game, bot: &mut Bot) -> Vec<Event> {
-    if g.state().tick % 10 == 0 {
-        for action in bot.decide(g) {
-            let _ = g.apply(action);
-        }
-    }
+    bot.take_turn(g);
     g.tick();
     g.drain_events()
 }

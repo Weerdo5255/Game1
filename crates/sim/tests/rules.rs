@@ -96,7 +96,9 @@ fn infiltration_rules() {
         })
     };
     let g = leak(&|_| {});
-    assert_eq!(g.can_apply(&Action::Infiltrate { node: NodeId(1) }), Ok(()));
+    // a first-time node is breached; the plain verb is kept for retakes and Compliant Strongholds
+    assert_eq!(g.breach_startable(NodeId(1)), Ok(()));
+    assert_eq!(g.can_apply(&Action::Infiltrate { node: NodeId(1) }), Err(ActionError::BreachRequired { node: NodeId(1) }));
     assert!(g.reachable(NodeId(1)) && !g.reachable(NodeId(3)) && !g.reachable(NodeId(0)));
     assert_eq!(g.can_apply(&Action::Infiltrate { node: NodeId(3) }), Err(ActionError::NodeNotReachable { node: NodeId(3) }));
     assert_eq!(g.can_apply(&Action::Infiltrate { node: NodeId(0) }), Err(ActionError::NodeNotReachable { node: NodeId(0) }));
@@ -110,7 +112,7 @@ fn infiltration_rules() {
     assert!(!g.reachable(NodeId(5)));
     assert_eq!(g.can_apply(&Action::Infiltrate { node: NodeId(4) }), Err(ActionError::NotInfiltratable { node: NodeId(4) }));
     assert_eq!(g.can_apply(&Action::Infiltrate { node: NodeId(2) }), Err(ActionError::NotInfiltratable { node: NodeId(2) }));
-    assert_eq!(g.can_apply(&Action::Infiltrate { node: NodeId(1) }), Err(ActionError::NotEnough { resource: Resource::Influence, missing: 7.0 }));
+    assert_eq!(g.breach_startable(NodeId(1)), Err(ActionError::NotEnough { resource: Resource::Influence, missing: 7.0 }));
 
     let g = leak(&|s| {
         own(s, 2);
@@ -118,7 +120,7 @@ fn infiltration_rules() {
         s.infiltration = Some(InfiltrationState { node: NodeId(1), ticks_left: 5, ticks_total: 120, retake: false });
     });
     assert!(g.reachable(NodeId(5)));
-    assert_eq!(g.can_apply(&Action::Infiltrate { node: NodeId(5) }), Err(ActionError::InfiltrationBusy));
+    assert_eq!(g.breach_startable(NodeId(5)), Err(ActionError::InfiltrationBusy));
     assert_eq!(g.infiltration_secs(NodeId(5)), 12.0);
 }
 

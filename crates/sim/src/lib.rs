@@ -16,6 +16,7 @@ macro_rules! plain_enum {
 pub mod actions;
 mod apply;
 pub mod bot;
+pub mod breach;
 pub(crate) mod calc;
 pub mod content;
 pub mod events;
@@ -183,6 +184,22 @@ pub struct BuildPreview {
     pub range: f64,
 }
 
+/// What the Briefing shows before a Breach of a node.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BreachPreview {
+    pub level: u8,
+    /// The parts that sum to `level`: (1, "base"), (k / step, "nodes taken"), (1, "Alarmed"), (-n, "cap").
+    pub level_reasons: Vec<(i8, &'static str)>,
+    /// The board as it would start at the minimum commit.
+    pub board: BreachState,
+    pub trace_secs: f64,
+    pub min_commit: f64,
+    pub max_commit: f64,
+    pub influence: f64,
+    /// The loot of each Cache, in host order.
+    pub loot: Vec<Loot>,
+}
+
 #[derive(Clone)]
 pub struct Game {
     pub(crate) state: GameState,
@@ -305,7 +322,13 @@ fn initial_state(seed: u64, pace: f64) -> GameState {
             ops_failed: 0,
             stage_ticks: [0; 6],
             gate_latches: [false; 3],
+            breaches_won: 0,
+            breaches_lost: 0,
         },
+        breach: None,
+        breach_attempts: 0,
+        breach_cooldown: 0,
+        breach_failed: Default::default(),
     }
 }
 
@@ -326,12 +349,17 @@ impl Game {
         &self.state
     }
 
-    /// Advances exactly one tick; a no-op once the run is over.
+    /// Advances exactly one tick; a no-op once the run is over. While a Breach runs this is one
+    /// Breach tick and the world, `state.tick` included, stands still.
     pub fn tick(&mut self) {
         if self.state.outcome != Outcome::Running {
             return;
         }
-        systems::step(self);
+        if self.state.breach.is_some() {
+            breach::step(self);
+        } else {
+            systems::step(self);
+        }
     }
 
     pub fn can_apply(&self, action: &Action) -> Result<(), ActionError> {
@@ -504,5 +532,86 @@ impl Game {
     }
     pub fn directive(&self) -> [DirectiveLine; 3] {
         calc::directive(&self.state)
+    }
+
+    /// A first-time infiltration, which is a Breach: Neutral, not severed, not compliant.
+    pub fn needs_breach(&self, node: NodeId) -> bool {
+        calc::needs_breach(&self.state, node)
+    }
+    /// The board the next `StartBreach` on `node` would get; `None` unless `needs_breach`.
+    pub fn breach_preview(&self, node: NodeId) -> Option<BreachPreview> {
+        let s = &self.state;
+        if !calc::needs_breach(s, node) {
+            return None;
+        }
+        let parts = calc::breach_level_parts(s);
+        let level = calc::breach_level(s);
+        let mut level_reasons = vec![(1, "base")];
+        if parts[1] != 0 {
+            level_reasons.push((parts[1], "nodes taken"));
+        }
+        if parts[2] != 0 {
+            level_reasons.push((parts[2], "Alarmed"));
+        }
+        let over = parts.iter().map(|&p| p as i32).sum::<i32>() - level as i32;
+        if over != 0 {
+            level_reasons.push((-over as i8, "cap"));
+        }
+        let board = breach::next_board(s, node);
+        let (min_commit, max_commit) = calc::breach_commit_range(s, node);
+        Some(BreachPreview {
+            level,
+            level_reasons,
+            trace_secs: calc::ticks_to_secs(board.trace_limit),
+            min_commit,
+            max_commit,
+            influence: calc::infiltration_cost(s, node).influence,
+            loot: board.hosts.iter().filter_map(|h| h.loot).collect(),
+            board,
+        })
+    }
+    /// `can_apply` of a routine Breach at the minimum commit.
+    pub fn breach_startable(&self, node: NodeId) -> Result<(), ActionError> {
+        let commit = calc::breach_commit_range(&self.state, node).0;
+        self.can_apply(&Action::StartBreach { node, commit, auto: true })
+    }
+    /// The Entry's starting charge for this commit.
+    pub fn breach_entry_charge(&self, node: NodeId, commit: f64) -> u32 {
+        let s = &self.state;
+        calc::breach_entry_charge(calc::breach_level(s), commit, calc::breach_commit_range(s, node).0)
+    }
+    /// The routine's chance of winning at this commit, 0..1, from `BREACH_ROUTINE_ODDS`.
+    pub fn breach_routine_odds(&self, node: NodeId, commit: f64) -> f64 {
+        let s = &self.state;
+        let min = calc::breach_commit_range(s, node).0;
+        let x = if min > 0.0 && commit.is_finite() { commit / min } else { 1.0 };
+        let row = &BREACH_ROUTINE_ODDS[(calc::breach_level(s) - 1) as usize];
+        let at = &BREACH_ODDS_COMMITS;
+        let mut odds = if x <= at[0] { row[0] } else { row[row.len() - 1] };
+        for i in 1..at.len() {
+            if x > at[i - 1] && x <= at[i] {
+                odds = row[i - 1] + (row[i] - row[i - 1]) * (x - at[i - 1]) / (at[i] - at[i - 1]);
+            }
+        }
+        odds.clamp(0.0, 1.0)
+    }
+    pub fn breach_cooldown_secs(&self) -> f64 {
+        calc::ticks_to_secs(self.state.breach_cooldown)
+    }
+    /// Per second; 0 for a neutral host, one at the growth cap, or with no Breach running.
+    pub fn breach_host_growth(&self, host: u8) -> f64 {
+        self.state.breach.as_ref().map_or(0.0, |b| breach::host_growth(b, host))
+    }
+    /// Most streams the host's owner may run from it; 0 for a neutral host or with no Breach running.
+    pub fn breach_stream_limit(&self, host: u8) -> u8 {
+        self.state.breach.as_ref().map_or(0, |b| breach::stream_limit(b, host))
+    }
+    /// Ends a running Breach as RootCaptured with `auto_used` set; for tests and debug flags only.
+    #[doc(hidden)]
+    pub fn breach_force_win(&mut self) {
+        if let Some(b) = self.state.breach.as_mut() {
+            b.auto_used = true;
+            breach::finish(self, BreachEnd::RootCaptured);
+        }
     }
 }

@@ -348,7 +348,8 @@ impl MapView {
                 draw_circle_lines(c.x, c.y, ring, 1.0, alpha(t.teal_dim, 0.55));
                 arc(c, ring, -PI * 0.5, -PI * 0.5 + TAU * frac, 2.5, lerp_color(t.danger, t.good, frac));
             } else if ns.owner == Owner::Neutral {
-                let infiltratable = matches!(game.can_apply(&Action::Infiltrate { node: id }), Ok(()) | Err(ActionError::NotEnough { .. }) | Err(ActionError::InfiltrationBusy));
+                let open = if game.needs_breach(id) { game.breach_startable(id) } else { game.can_apply(&Action::Infiltrate { node: id }) };
+                let infiltratable = matches!(open, Ok(()) | Err(ActionError::NotEnough { .. }) | Err(ActionError::InfiltrationBusy));
                 if infiltratable {
                     dashed_circle(c, ring, 10, time * 0.5, 1.5, t.teal);
                 }

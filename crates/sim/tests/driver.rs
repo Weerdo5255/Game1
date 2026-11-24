@@ -9,6 +9,7 @@ fn can_apply_agrees() {
     let mut total = 0;
     let mut accepted = 0;
     let mut rejected_kinds = std::collections::BTreeSet::new();
+    let (mut breach_steps, mut breach_accepted) = (0, 0);
     for variant in 0..4 {
         for seed in 0..2u64 {
             let mut g = midgame(variant);
@@ -17,7 +18,10 @@ fn can_apply_agrees() {
                 g = edit(&g, |s| s.resources = Resources::new(130.0, 260.0, 90.0));
             }
             let mut r = TestRng::new(100 + variant as u64 * 7 + seed);
-            for i in 0..1250 {
+            // only iterations with no Breach running count; the world stands still in the others
+            let mut i = 0;
+            while i < 1250 {
+                let in_breach = g.state().breach.is_some();
                 // every other action is drawn until a legal one turns up, so both sides get exercised
                 let mut a = random_action(&mut r, &g);
                 if i % 2 == 0 {
@@ -28,16 +32,27 @@ fn can_apply_agrees() {
                         a = random_action(&mut r, &g);
                     }
                 }
+                if g.state().breach.as_ref().is_some_and(|b| b.tick > 100) {
+                    a = Action::BreachAbort;
+                }
                 g.drain_events();
                 let before = g.state().clone();
                 let can = g.can_apply(&a);
                 let did = g.apply(a.clone());
                 assert_eq!(can, did, "variant {variant} action {a:?}");
                 let events = g.drain_events();
-                total += 1;
+                if in_breach {
+                    breach_steps += 1;
+                    breach_accepted += did.is_ok() as u32;
+                    if !is_breach_action(&a) {
+                        assert_eq!(did, Err(ActionError::BreachActive), "{a:?} during a Breach");
+                    }
+                } else {
+                    total += 1;
+                }
                 match did {
                     Ok(()) => {
-                        accepted += 1;
+                        accepted += !in_breach as u32;
                         let res = g.state().resources;
                         assert!(res.compute >= 0.0 && res.funds >= 0.0 && res.influence >= 0.0, "{a:?} overdrew: {res:?}");
                         assert!(!events.iter().any(|e| matches!(e, Event::ActionRejected { .. })));
@@ -49,6 +64,9 @@ fn can_apply_agrees() {
                     }
                 }
                 g.tick();
+                if in_breach {
+                    continue;
+                }
                 // the rich twin is topped up so that cooldowns, not stock, are what refuses it
                 if seed == 0 && i % 50 == 49 {
                     g = edit(&g, |s| {
@@ -56,6 +74,7 @@ fn can_apply_agrees() {
                         s.shards += 5;
                     });
                 }
+                i += 1;
             }
         }
     }
@@ -63,6 +82,7 @@ fn can_apply_agrees() {
     // the generator must exercise both sides, and a broad range of refusals
     assert!(accepted > 800, "only {accepted} accepted");
     assert!(rejected_kinds.len() >= 20, "{rejected_kinds:?}");
+    assert!(breach_steps > 100 && breach_accepted > 30, "{breach_steps} Breach steps, {breach_accepted} orders accepted");
 }
 
 #[test]
@@ -80,7 +100,7 @@ fn rejected_after_game_over() {
 }
 
 /// The hash at every 600th tick, then the final hash.
-fn hashes(mut g: Game, log: &[(u64, Action)], ticks: u64) -> Vec<u64> {
+fn hashes(mut g: Game, log: &[(LogKey, Action)], ticks: u64) -> Vec<u64> {
     let mut out = Vec::new();
     let mut calls = 0;
     replay(&mut g, log, ticks, |g| {
@@ -151,7 +171,7 @@ fn save_load_roundtrip() {
     let mut g = midgame(2);
     g.apply(Action::StartOp { kind: OpKind::ForgedMemo, target: OpTarget::Faction(FactionId::Lamplighters) }).unwrap();
     g.apply(Action::StartResearch { tech: TechId::R4 }).unwrap();
-    g.apply(Action::Infiltrate { node: NodeId(15) }).unwrap();
+    infiltrate(&mut g, NodeId(15)).unwrap();
     let mut log = Vec::new();
     drive(&mut g, &mut TestRng::new(77), 90, &mut log);
     let s = g.state();

@@ -331,6 +331,7 @@ fn timers(game: &mut Game) {
 
     // cooldowns tick before operations resolve, so one set at completion starts full
     let s = &mut game.state;
+    dec(&mut s.breach_cooldown);
     dec(&mut s.grease_cooldown);
     dec(&mut s.scapegoat_cooldown);
     for f in s.factions.iter_mut() {

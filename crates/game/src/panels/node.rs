@@ -204,7 +204,12 @@ fn neutral(ui: &mut Ui, game: &mut Game, n: NodeId, ns: &NodeState) {
         ("Infiltrate", format!("Infiltrate\nOn completion the node is yours at full integrity. Suspicion +{}. One infiltration at a time.", text::amount(susp)))
     };
     let tip = format!("{body}\nCost {}. Takes {}.", text::cost_long(&cost), fmt_secs(secs));
-    act(ui, game, Rect::new(x, y, w, 46.0), label, &format!("{}, {}", text::cost_text(&cost), fmt_secs(secs)), &tip, Action::Infiltrate { node: n });
+    // placeholder until the Briefing exists: a first-time node goes to the routine at the minimum commit
+    let action = match game.breach_preview(n) {
+        Some(p) => Action::StartBreach { node: n, commit: p.min_commit, auto: true },
+        None => Action::Infiltrate { node: n },
+    };
+    act(ui, game, Rect::new(x, y, w, 46.0), label, &format!("{}, {}", text::cost_text(&cost), fmt_secs(secs)), &tip, action);
     let hint = if ns.severed {
         "This node was yours. Its buildings lost a level when it was severed."
     } else if ns.compliant {

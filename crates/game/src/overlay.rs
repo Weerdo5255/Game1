@@ -238,7 +238,10 @@ impl Hints {
             5 => vec2(L::SIDE_TABS.x + 150.0, L::SIDE_TABS.y + L::SIDE_TABS.h),
             _ => NODES
                 .iter()
-                .find(|d| s.nodes[d.id.index()].owner == Owner::Neutral && game.can_apply(&Action::Infiltrate { node: d.id }).is_ok())
+                .find(|d| {
+                    let open = if game.needs_breach(d.id) { game.breach_startable(d.id) } else { game.can_apply(&Action::Infiltrate { node: d.id }) };
+                    s.nodes[d.id.index()].owner == Owner::Neutral && open.is_ok()
+                })
                 .or_else(|| NODES.iter().find(|d| s.nodes[d.id.index()].owner == Owner::Neutral && game.reachable(d.id)))
                 .map_or(map.node_pos(CORE), |d| map.node_pos(d.id)),
         }

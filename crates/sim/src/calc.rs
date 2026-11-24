@@ -407,6 +407,35 @@ pub(crate) fn infiltration_secs(s: &GameState, node: NodeId) -> f64 {
     }
 }
 
+// ---- the Breach ----
+
+/// A first-time infiltration: Neutral, not severed, not compliant.
+pub(crate) fn needs_breach(s: &GameState, node: NodeId) -> bool {
+    s.nodes.get(node.index()).is_some_and(|n| n.owner == Owner::Neutral && !n.severed && !n.compliant)
+}
+
+/// (min, max) Compute a Breach of `node` may commit.
+pub(crate) fn breach_commit_range(s: &GameState, node: NodeId) -> (f64, f64) {
+    let min = BREACH.min_fraction * infiltration_cost(s, node).compute;
+    (min, BREACH.commit_max * min)
+}
+
+/// The parts of the security level before the clamp to 1..=5: base, nodes taken, Alarmed.
+pub(crate) fn breach_level_parts(s: &GameState) -> [i8; 3] {
+    let taken = (s.infiltrations_done / BREACH.level_step.max(1)).min(100) as i8;
+    [1, taken, (s.band >= Band::Alarmed) as i8]
+}
+
+pub(crate) fn breach_level(s: &GameState) -> u8 {
+    breach_level_parts(s).iter().map(|&p| p as i32).sum::<i32>().clamp(1, 5) as u8
+}
+
+pub(crate) fn breach_entry_charge(level: u8, commit: f64, min: f64) -> u32 {
+    let base = BREACH_LEVELS[(level.clamp(1, 5) - 1) as usize].entry_base;
+    let ratio = if min > 0.0 && commit.is_finite() { (commit / min).clamp(0.0, BREACH.commit_max) } else { 1.0 };
+    (base * ratio + 0.5).floor() as u32
+}
+
 // ---- routes ----
 
 pub(crate) fn unit_route(s: &GameState, routes: &Routes, unit: UnitId) -> Vec<NodeId> {
