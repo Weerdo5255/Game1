@@ -557,63 +557,176 @@ fn routine(b: &mut BreachState, adj: &[Vec<u8>]) {
     }
 }
 
-/// The careful policy of 9.8, as the orders a player would give this tick: it gathers charge
-/// before striking, takes Amplifiers first, cuts a host's streams while it is under
-/// counter-attack and weak, and detours for a Cache when it has force to spare.
+/// Packets it takes to flip a host the player does not hold, as the careful policy counts them.
+fn flip_cost(host: &BreachHost) -> f64 {
+    match host.side {
+        Side::Player => 0.3,
+        Side::Neutral => host.charge + 1.0,
+        Side::Warden => (if host.kind == HostKind::Bulwark { 2.0 } else { 1.0 }) * host.charge + 3.0,
+    }
+}
+
+/// For every host, the packets it takes to reach and flip `target` from there along the
+/// cheapest route, and the first hop of that route (the host itself at the target).
+fn cheapest_routes(b: &BreachState, adj: &[Vec<u8>], target: u8) -> (Vec<f64>, Vec<u8>) {
+    let n = b.hosts.len();
+    let mut cost = vec![f64::INFINITY; n];
+    let mut next: Vec<u8> = (0..n as u8).collect();
+    cost[target as usize] = 0.0;
+    for _ in 0..n {
+        for h in 0..n {
+            for &m in &adj[h] {
+                let via = cost[m as usize] + flip_cost(&b.hosts[m as usize]);
+                if via < cost[h] - 1e-9 {
+                    cost[h] = via;
+                    next[h] = m;
+                }
+            }
+        }
+    }
+    (cost, next)
+}
+
+/// The careful policy of 9.8, as the orders a player would give this tick. It plays the
+/// routine's shortest route, but takes Amplifiers first and cheap neutral hosts early for their
+/// growth, strikes a Warden host a little sooner than the routine does, cuts a host's side
+/// streams while it is under counter-attack and weak, and detours for a Cache when it has force
+/// to spare, leaving the Root standing meanwhile if the Trace allows.
 pub fn careful_policy(b: &BreachState) -> Vec<Action> {
-    const HOLD: f64 = 3.0;
-    const UNDER_ATTACK_HOLD: f64 = 6.0;
-    const FEED_FROM: f64 = 5.0;
+    // a stream is opened from `factor x target charge + margin` (a Bulwark counts double)
+    let strike_w = (0.45, 2.0);
+    let strike_n = (0.6, 3.0);
+    // a stream to one of its own hosts is opened from this much charge, and any stream kept down to `hold`
+    let feed_from = 3.0;
+    let hold = 2.0;
+    // below this an attacked host keeps only its Amplifier, Cache and main streams
+    let under_attack_hold = 8.0;
+    // a neutral host is taken for its growth while it pays back inside this share of the time left
+    let payback_share = 0.5;
+    // a second, parallel stream towards the Root needs this much charge
+    let parallel_from = 10.0;
+    // force to spare: all the player's charge, less the route to the Root times this, less the margin
+    let spare_factor = 1.5;
+    let spare_margin = 10.0;
+    // the Root is left standing for Caches only while this share of the Trace is left
+    let loot_trace_share = 0.6;
+
+    let Some(root) = root_index(b) else { return Vec::new() };
     let adj = adjacency(b);
-    let next = next_hops(&adj, root_index(b));
-    let mut out = Vec::new();
-    for h in 0..b.hosts.len() as u8 {
-        let host = &b.hosts[h as usize];
-        if host.side != Side::Player {
+    let (to_root, _) = cheapest_routes(b, &adj, root);
+    let next = next_hops(&adj, Some(root));
+    let mine: Vec<u8> = (0..b.hosts.len() as u8).filter(|&h| b.hosts[h as usize].side == Side::Player).collect();
+    let secs_left = calc::ticks_to_secs(b.trace_limit.saturating_sub(b.tick));
+    let time_share = secs_left / calc::ticks_to_secs(b.trace_limit).max(1.0);
+    let needed = |to: u8| {
+        let target = &b.hosts[to as usize];
+        let armour = if target.kind == HostKind::Bulwark { 2.0 } else { 1.0 };
+        match target.side {
+            Side::Player => feed_from,
+            Side::Neutral => strike_n.0 * target.charge + strike_n.1,
+            Side::Warden => strike_w.0 * armour * target.charge + strike_w.1,
+        }
+    };
+
+    // force to spare, and the Caches it reaches for
+    let force: f64 = mine.iter().map(|&h| b.hosts[h as usize].charge).sum::<f64>() + b.packets.iter().filter(|p| p.side == Side::Player).count() as f64;
+    let front = mine.iter().map(|&h| to_root[h as usize]).fold(f64::INFINITY, f64::min);
+    let mut spare = force - spare_factor * front - spare_margin;
+    // the Caches worth a detour, cheapest first; each is reached for from the nearest host that
+    // can pay for it alone, or else from the fullest, along the cheapest route
+    let mut detours: Vec<(u8, u8)> = Vec::new();
+    let mut cache_routes: Vec<(f64, u8, Vec<f64>, Vec<u8>)> = Vec::new();
+    for c in 0..b.hosts.len() as u8 {
+        let cache = &b.hosts[c as usize];
+        if cache.kind != HostKind::Cache || cache.side == Side::Player {
             continue;
         }
+        let (to_cache, hop) = cheapest_routes(b, &adj, c);
+        let nearest = mine.iter().map(|&h| to_cache[h as usize]).fold(f64::INFINITY, f64::min);
+        cache_routes.push((nearest, c, to_cache, hop));
+    }
+    cache_routes.sort_by(|a, z| a.0.total_cmp(&z.0).then(a.1.cmp(&z.1)));
+    for (cost, _, to_cache, hop) in cache_routes {
+        if spare < cost + 2.0 {
+            continue;
+        }
+        spare -= cost;
+        let mut source: Option<u8> = None;
+        for &h in &mine {
+            let pays = |x: u8| b.hosts[x as usize].charge >= to_cache[x as usize] + 3.0;
+            let better = source.is_none_or(|x| match (pays(h), pays(x)) {
+                (true, true) => to_cache[h as usize] < to_cache[x as usize],
+                (false, false) => b.hosts[h as usize].charge > b.hosts[x as usize].charge,
+                (p, _) => p,
+            });
+            if better {
+                source = Some(h);
+            }
+        }
+        let mut at = source.unwrap_or(root);
+        for _ in 0..b.hosts.len() {
+            let to = hop[at as usize];
+            if b.hosts[at as usize].side != Side::Player || to == at {
+                break;
+            }
+            detours.push((at, to));
+            at = to;
+        }
+    }
+    // the Root is left standing only for a Cache some host can reach for now
+    let reaching = detours.iter().any(|&(h, to)| b.hosts[to as usize].side != Side::Player && (has_stream(b, h, to) || b.hosts[h as usize].charge >= needed(to)));
+    let spare_root = reaching && time_share > loot_trace_share;
+
+    let mut out = Vec::new();
+    for &h in &mine {
+        let host = &b.hosts[h as usize];
         let own = host.charge;
         let attacked = b.streams.iter().any(|s| s.to == h && b.hosts[s.from as usize].side == Side::Warden)
             || b.packets.iter().any(|p| p.to == h && p.side == Side::Warden);
-        // what it takes to open a stream to each kind of target
-        let strike = |to: u8, spare: f64| {
-            let target = &b.hosts[to as usize];
-            let armour = if target.kind == HostKind::Bulwark { 2.0 } else { 1.0 };
-            match target.side {
-                Side::Player => FEED_FROM,
-                Side::Neutral => target.charge + 3.0 + spare,
-                Side::Warden => armour * 1.2 * target.charge + 5.0 + spare,
-            }
+        let weak = attacked && own < under_attack_hold;
+        let main = next[h as usize];
+        // candidates in order of preference
+        let mut plans: Vec<(u8, f64)> = Vec::new();
+        let neutral_worth = |n: u8| {
+            let target = &b.hosts[n as usize];
+            let rate = BREACH.player_growth * if target.kind == HostKind::Amplifier { 2.0 } else { 1.0 };
+            target.side == Side::Neutral && target.kind != HostKind::Cache && (target.charge + 1.0) / rate.max(1e-9) <= payback_share * secs_left
         };
-        let hostile = |kind: HostKind| {
-            let mut best: Option<u8> = None;
-            for &n in &adj[h as usize] {
-                let target = &b.hosts[n as usize];
-                if target.kind == kind && target.side != Side::Player && best.is_none_or(|x| target.charge < b.hosts[x as usize].charge) {
-                    best = Some(n);
+        let mut neutrals: Vec<u8> = adj[h as usize].iter().copied().filter(|&n| neutral_worth(n)).collect();
+        neutrals.sort_by(|&x, &y| b.hosts[x as usize].charge.total_cmp(&b.hosts[y as usize].charge).then(x.cmp(&y)));
+        for &n in neutrals.iter().filter(|&&n| b.hosts[n as usize].kind == HostKind::Amplifier) {
+            plans.push((n, needed(n)));
+        }
+        for &(from, to) in &detours {
+            if from == h {
+                plans.push((to, needed(to)));
+            }
+        }
+        // not against a detour, and not into the Root while it is spared
+        if main != h && !(main == root && spare_root) && !detours.contains(&(main, h)) {
+            plans.push((main, needed(main)));
+        }
+        if !weak {
+            for &n in neutrals.iter().filter(|&&n| b.hosts[n as usize].kind != HostKind::Amplifier) {
+                plans.push((n, needed(n)));
+            }
+            // a second route for a host with more charge than one stream can carry
+            let mut second: Option<u8> = None;
+            for &m in &adj[h as usize] {
+                let ahead = (to_root[m as usize], m) < (to_root[h as usize], h) && next[m as usize] != h;
+                if m != main && m != root && b.hosts[m as usize].side == Side::Player && ahead && second.is_none_or(|x| to_root[m as usize] < to_root[x as usize]) {
+                    second = Some(m);
                 }
             }
-            best
-        };
+            if let Some(m) = second {
+                plans.push((m, parallel_from));
+            }
+        }
         let mut want: Vec<u8> = Vec::new();
-        if !(attacked && own < UNDER_ATTACK_HOLD) {
-            let to = next[h as usize];
-            let mut plans: Vec<(u8, f64)> = Vec::new();
-            if let Some(a) = hostile(HostKind::Amplifier) {
-                plans.push((a, strike(a, 1.0)));
-            }
-            if to != h {
-                plans.push((to, strike(to, 0.0)));
-            }
-            if let Some(c) = hostile(HostKind::Cache) {
-                // force to spare: twice what the Cache holds, and more
-                plans.push((c, strike(c, b.hosts[c as usize].charge + 5.0)));
-            }
-            for (to, needed) in plans {
-                let open = has_stream(b, h, to);
-                if !want.contains(&to) && want.len() < BREACH.max_streams as usize && ((open && own >= HOLD) || (!open && own >= needed)) {
-                    want.push(to);
-                }
+        for (to, needed) in plans {
+            let open = has_stream(b, h, to);
+            if !want.contains(&to) && want.len() < BREACH.max_streams as usize && ((open && own >= hold) || (!open && own >= needed)) {
+                want.push(to);
             }
         }
         for s in b.streams.iter().filter(|s| s.from == h && !want.contains(&s.to)) {
@@ -840,4 +953,164 @@ pub(crate) fn finish(game: &mut Game, reason: BreachEnd) {
     let ticks = calc::secs_to_ticks(calc::infiltration_secs(s, b.node));
     s.infiltration = Some(InfiltrationState { node: b.node, ticks_left: ticks, ticks_total: ticks, retake: false });
     game.events.push(Event::InfiltrationStarted { node: b.node });
+}
+
+// ---- the balance measurement (9.8) ----
+
+/// How one Breach played to its end went.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Played {
+    pub end: BreachEnd,
+    pub ticks: u32,
+    /// Ticks that began with at least one player stream open.
+    pub stream_ticks: u32,
+    pub caches_held: u8,
+    pub caches_total: u8,
+}
+
+/// The careful policy decides at most this often, as a player giving orders would.
+pub const CAREFUL_PERIOD: u32 = 5;
+
+/// Plays `board` to its end with the routine, or with the careful policy deciding every
+/// `CAREFUL_PERIOD` ticks.
+pub fn play_measured(mut board: BreachState, careful: bool) -> Played {
+    board.auto = !careful;
+    board.auto_used = !careful;
+    let mut stream_ticks = 0;
+    let mut events = Vec::new();
+    let end = loop {
+        if careful && board.tick % CAREFUL_PERIOD == 0 {
+            for action in careful_policy(&board) {
+                let _ = apply(&mut board, &action);
+            }
+        }
+        let open = board.streams.iter().any(|s| board.hosts[s.from as usize].side == Side::Player);
+        let end = tick(&mut board, &mut events);
+        // the routine's first orders are given inside the tick
+        if open || (board.tick == 1 && board.streams.iter().any(|s| board.hosts[s.from as usize].side == Side::Player)) {
+            stream_ticks += 1;
+        }
+        events.clear();
+        if let Some(end) = end {
+            break end;
+        }
+    };
+    let (caches_held, caches_total) = caches(&board);
+    Played { end, ticks: board.tick, stream_ticks, caches_held, caches_total }
+}
+
+/// What a board is built from besides the seed and the node: the world a Steward has reached
+/// when its count of first-time infiltrations first gives a security level.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BoardContext {
+    pub stage: Stage,
+    pub income: Resources,
+    /// The minimum commit of each resource node, in `resource_nodes()` order.
+    pub min: Vec<f64>,
+}
+
+/// The 18 nodes that yield a resource, in id order.
+pub fn resource_nodes() -> Vec<NodeId> {
+    NODES.iter().filter(|n| node_yield(n.kind).is_some()).map(|n| n.id).collect()
+}
+
+/// Runs a Steward on `seed`, every Breach it starts ending as won, and records the context of
+/// levels 1 to 5 at k = 0, 3, 6, 9 and 12 (the last one reached stands in for any it never gets to).
+pub fn board_contexts(seed: u64) -> Vec<BoardContext> {
+    use crate::bot::{Bot, BotKind};
+    let nodes = resource_nodes();
+    let mut game = Game::new(seed);
+    let mut bot = Bot::new(BotKind::Steward);
+    let mut out: Vec<BoardContext> = Vec::new();
+    let context = |g: &Game| BoardContext {
+        stage: g.state.stage,
+        income: calc::income(&g.state),
+        min: nodes.iter().map(|&n| BREACH.min_fraction * calc::infiltration_cost(&g.state, n).compute).collect(),
+    };
+    while out.len() < 5 && game.state.outcome == Outcome::Running && game.state.tick < 36_000 {
+        // a level's boards are built when the Steward could first afford one
+        if game.state.infiltrations_done >= BREACH.level_step * out.len() as u32 && game.state.stage >= Stage::Leak {
+            out.push(context(&game));
+            continue;
+        }
+        bot.take_turn(&mut game);
+        game.breach_force_win();
+        game.tick();
+        game.events.clear();
+    }
+    while out.len() < 5 {
+        out.push(context(&game));
+    }
+    out
+}
+
+/// One cell of the measurement: a level, a commit multiple and a player.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Measured {
+    pub plays: u32,
+    pub wins: u32,
+    /// Losses to the Trace; the other losses are Overrun.
+    pub traced: u32,
+    /// Length in ticks of every won Breach.
+    pub won_ticks: Vec<u32>,
+    /// Summed over wins: the share of ticks with a stream open.
+    pub stream_share: f64,
+    /// Summed over wins.
+    pub caches_held: u32,
+    pub caches_total: u32,
+}
+
+impl Measured {
+    pub fn win_rate(&self) -> f64 {
+        self.wins as f64 / self.plays.max(1) as f64
+    }
+    pub fn median_secs(&self) -> f64 {
+        let mut v = self.won_ticks.clone();
+        v.sort_unstable();
+        v.get(v.len() / 2).map_or(0.0, |&t| calc::ticks_to_secs(t))
+    }
+    pub fn max_secs(&self) -> f64 {
+        self.won_ticks.iter().max().map_or(0.0, |&t| calc::ticks_to_secs(t))
+    }
+    pub fn mean_stream_share(&self) -> f64 {
+        self.stream_share / self.wins.max(1) as f64
+    }
+    pub fn cache_share(&self) -> f64 {
+        self.caches_held as f64 / self.caches_total.max(1) as f64
+    }
+}
+
+/// The measurement of 9.8: for each level, the boards of the 18 resource nodes on each of
+/// `seeds`, played by the routine (`[level - 1][0]`) and by the careful policy (`[level - 1][1]`)
+/// at each of `BREACH_ODDS_COMMITS`.
+pub fn measure(seeds: std::ops::RangeInclusive<u64>) -> Vec<[[Measured; 4]; 2]> {
+    let nodes = resource_nodes();
+    let mut out: Vec<[[Measured; 4]; 2]> = (0..5).map(|_| Default::default()).collect();
+    for seed in seeds {
+        let contexts = board_contexts(seed);
+        for level in 1..=5u8 {
+            let context = &contexts[(level - 1) as usize];
+            for (n, &node) in nodes.iter().enumerate() {
+                let min = context.min[n];
+                let board = build_board(seed, node, 1, level, context.stage, context.income, min);
+                for (c, &multiple) in BREACH_ODDS_COMMITS.iter().enumerate() {
+                    for careful in [false, true] {
+                        let played = play_measured(with_commit(board.clone(), multiple * min), careful);
+                        let cell = &mut out[(level - 1) as usize][careful as usize][c];
+                        cell.plays += 1;
+                        if played.end == BreachEnd::RootCaptured {
+                            cell.wins += 1;
+                            cell.won_ticks.push(played.ticks);
+                            cell.stream_share += played.stream_ticks as f64 / played.ticks.max(1) as f64;
+                            cell.caches_held += played.caches_held as u32;
+                            cell.caches_total += played.caches_total as u32;
+                        } else if played.end == BreachEnd::Traced {
+                            cell.traced += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
 }

@@ -240,3 +240,60 @@ fn save_load_roundtrip_steward() {
     assert!(g.state().units.iter().any(|u| u.sortie == SortieKind::Uprising));
     roundtrip(&g, BotKind::Steward);
 }
+
+/// The Breach against the targets of SPEC 9.8. Thresholds sit a few points under the measurement
+/// (`cargo run -p sim --release --example breach`), and never under the target itself.
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn breach_balance() {
+    use sim::content::{BREACH_ODDS_COMMITS, BREACH_ROUTINE_ODDS};
+    let table = sim::breach::measure(1..=20);
+    assert_eq!((table.len(), BREACH_ODDS_COMMITS), (5, [1.0, 1.5, 2.0, 3.0]));
+    // measured at the minimum: routine 100 / 93 / 86 / 74 / 66%, careful 100 / 96 / 94 / 91 / 94%
+    let routine_floor = [0.97, 0.90, 0.83, 0.71, 0.62];
+    let careful_floor = [0.97, 0.93, 0.90, 0.87, 0.90];
+    for (l, row) in table.iter().enumerate() {
+        let level = l + 1;
+        let (routine, careful) = (&row[0], &row[1]);
+        assert!(routine.iter().chain(careful.iter()).all(|cell| cell.plays == 360), "level {level}: 18 nodes x 20 seeds");
+        let rate = |cells: &[sim::breach::Measured; 4]| -> Vec<f64> { cells.iter().map(|cell| cell.win_rate()).collect() };
+        let (r, c) = (rate(routine), rate(careful));
+        assert!(r[0] >= routine_floor[l], "level {level}: routine at the minimum wins {:.3}", r[0]);
+        // measured: at least 96% at 2 x and 99% at 3 x
+        assert!(r[2] >= 0.94 && r[3] >= 0.98, "level {level}: routine at 2 x and 3 x wins {:.3} and {:.3}", r[2], r[3]);
+        assert!(c[0] >= careful_floor[l], "level {level}: careful at the minimum wins {:.3}", c[0]);
+        assert!(c[0] >= r[0], "level {level}: skill is worth at least the routine ({:.3} against {:.3})", c[0], r[0]);
+        for i in 0..4 {
+            assert!((r[i] - BREACH_ROUTINE_ODDS[l][i]).abs() <= 0.05, "level {level}, {} x: BREACH_ROUTINE_ODDS {} against a measured {:.3}", BREACH_ODDS_COMMITS[i], BREACH_ROUTINE_ODDS[l][i], r[i]);
+            // pace: measured at least 92% of a careful win's ticks with a stream open
+            assert!(careful[i].mean_stream_share() >= 0.88, "level {level}, {} x: a stream open {:.3} of the time", BREACH_ODDS_COMMITS[i], careful[i].mean_stream_share());
+        }
+        // loot: measured 20 / 46 / 45% of the Caches held at the minimum and 82 / 84 / 94% at 3 x (levels 3 to 5)
+        if level >= 3 {
+            assert!(careful[0].cache_share() <= 0.50, "level {level}: {:.3} of the Caches held at the minimum", careful[0].cache_share());
+            assert!(careful[3].cache_share() >= 0.80, "level {level}: {:.3} of the Caches held at 3 x", careful[3].cache_share());
+        }
+        // pace: the median careful win at the minimum, measured 15.6 / 26.4 / 33.4 / 48.9 / 49.4 s
+        let median = careful[0].median_secs();
+        if level <= 3 {
+            assert!((15.0..=45.0).contains(&median), "level {level}: a careful win takes {median} s");
+        }
+        assert!(median < 60.0, "level {level}: a careful win takes {median} s");
+    }
+}
+
+/// The Steward's Breaches: it wins most of them and loses some, so the commit is a real choice.
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn steward_breaches() {
+    let (mut won, mut lost) = (0, 0);
+    for seed in 1..=5 {
+        let mut g = Game::with_pace(seed, TUNING.pace);
+        drive(&mut g, BotKind::Steward, |_| false, 60 * MIN);
+        assert!(g.state().stats.breaches_won >= 12, "seed {seed}: {} Breaches won", g.state().stats.breaches_won);
+        won += g.state().stats.breaches_won;
+        lost += g.state().stats.breaches_lost;
+    }
+    // measured on seeds 1 to 5: 79 won, 11 lost
+    assert!(lost >= 3 && lost * 3 <= won, "{won} Breaches won and {lost} lost");
+}

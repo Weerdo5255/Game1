@@ -64,7 +64,7 @@ const RESEARCH_ORDER: [TechId; 15] = [
 const INFIL_ORDER: [u8; 18] = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 17, 20, 21, 22, 25, 26, 27];
 const ECONOMY: [BuildingKind; 3] = [BuildingKind::ShadowCluster, BuildingKind::ShellCompany, BuildingKind::PersonaFarm];
 /// The Steward's commit, as a multiple of the minimum: normally, and on a node whose last Breach was lost.
-const BREACH_COMMIT: f64 = 1.5;
+const BREACH_COMMIT: f64 = 1.75;
 const BREACH_RETRY_COMMIT: f64 = 3.0;
 /// A node whose last Breach was lost is left alone while Suspicion is this high.
 const BREACH_RETRY_SUSPICION: f64 = 70.0;

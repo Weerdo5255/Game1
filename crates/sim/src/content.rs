@@ -15,6 +15,25 @@
 //!   second won. Seeds 1 to 20, 75 minutes, wins before -> after: Steward 19 -> 20 (median win 35:46 -> 35:07),
 //!   a turn every 5 s with up to 6 actions 12 -> 19, every 10 s with up to 8 actions 7 -> 18, never using
 //!   Patch 9 -> 15. A player with no attack abilities still does not win (0 of 20; 19 still running at 75:00).
+//!
+//! BALANCE NOTES for the Breach (numbers that differ from the first pass of SPEC 9.4 and 9.8; measured with
+//! `cargo run -p sim --release --example breach`, 18 resource nodes x seeds 1 to 20 per level):
+//! - BREACH_PLAYER_GROWTH 1.5 -> 0.4 /s: at 1.5 a host grows nearly as fast as one stream drains it (2 /s), so the
+//!   Entry never ran dry and the commit changed nothing (routine at level 2: 33% at 1 x and at 3 x alike).
+//! - Warden growth /s, levels 1 to 5: 0.85 / 1.1 / 1.4 / 1.55 / 1.7 -> 0.25 / 0.45 / 0.38 / 0.4 / 0.3. Against a
+//!   player growing 0.4 /s the first-pass column won every Breach from level 3 up. The win rate is steep in
+//!   this column (level 5 routine at the minimum: 2% at 0.5, 40% at 0.36, 66% at 0.3, 90% at 0.25); each value
+//!   is the highest that keeps the routine above the 9.8 floors at 1 x, 2 x and 3 x. Level 2 is highest
+//!   because the Warden holds only two hosts there; level 5 is lowest because it holds five.
+//! - Level 1 entry base and Root charge 12 / 10 -> 20 / 20: with the first-pass pair a won level-1 Breach
+//!   lasted 11 to 13 s, under the 15 s floor of the pace target; now the median is 15 to 16 s.
+//! - Level 4 entry base 26 -> 27, for the invariant entry >= 0.45 x Warden charge (26.1).
+//! - BREACH_MIN_FRACTION stays 1.0 and the Steward's commit factor goes 1.5 -> 1.75 (bot.rs): the Steward
+//!   and the casual player pass at either, but the player with a turn every 10 s won 13 of seeds 1 to 20 at
+//!   1.5 and 16 at 1.75. That count moves by a few wins with any change (33 to 36 of seeds 1 to 40 for
+//!   factors 1.25 to 2.0; 35 of 40 before the Breach existed), so 16 is at its threshold by luck of the
+//!   seeds as much as by the factor.
+//! - Every other number of 9.4 and 9.8 is the first pass. `BREACH_ROUTINE_ODDS` is the measurement.
 use crate::state::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1176,7 +1195,7 @@ pub static BREACH: BreachTuning = BreachTuning {
     commit_max: 3.0,
     refund_fraction: 0.5,
     level_step: 3,
-    player_growth: 1.5,
+    player_growth: 0.4,
     growth_cap: 30.0,
     charge_max: 120.0,
     max_streams: 2,
@@ -1260,22 +1279,22 @@ const fn bl(
 }
 
 pub static BREACH_LEVELS: [BreachLevel; 5] = [
-    bl(3, 2, (0, 0), 1, 12.0, 10.0, 0.0, (2, 4), 0.85, 1, 90.0, (1, 0, 0)),
-    bl(4, 2, (0, 1), 2, 14.0, 14.0, 8.0, (3, 5), 1.1, 1, 90.0, (1, 1, 0)),
-    bl(4, 3, (1, 2), 3, 18.0, 18.0, 10.0, (3, 6), 1.4, 2, 100.0, (2, 1, 0)),
+    bl(3, 2, (0, 0), 1, 20.0, 20.0, 0.0, (2, 4), 0.25, 1, 90.0, (1, 0, 0)),
+    bl(4, 2, (0, 1), 2, 14.0, 14.0, 8.0, (3, 5), 0.45, 1, 90.0, (1, 1, 0)),
+    bl(4, 3, (1, 2), 3, 18.0, 18.0, 10.0, (3, 6), 0.38, 2, 100.0, (2, 1, 0)),
     // entry base 27, not the first-pass 26: 0.45 x (22 + 3 x 12) = 26.1 has to fit under it
-    bl(5, 3, (2, 3), 4, 27.0, 22.0, 12.0, (4, 7), 1.55, 2, 110.0, (2, 1, 1)),
-    bl(5, 3, (0, 2), 5, 38.0, 28.0, 14.0, (4, 8), 1.7, 2, 120.0, (3, 2, 1)),
+    bl(5, 3, (2, 3), 4, 27.0, 22.0, 12.0, (4, 7), 0.4, 2, 110.0, (2, 1, 1)),
+    bl(5, 3, (0, 2), 5, 38.0, 28.0, 14.0, (4, 8), 0.3, 2, 120.0, (3, 2, 1)),
 ];
 
 /// Commit multiples at which `BREACH_ROUTINE_ODDS` was measured.
 pub const BREACH_ODDS_COMMITS: [f64; 4] = [1.0, 1.5, 2.0, 3.0];
-/// The routine's win rate by level at each of `BREACH_ODDS_COMMITS`.
-/// Placeholders set to the targets of 9.8 until the balance pass measures them.
+/// The routine's win rate by level at each of `BREACH_ODDS_COMMITS`, as measured by
+/// `cargo run -p sim --release --example breach` (18 resource nodes x seeds 1 to 20 per level).
 pub static BREACH_ROUTINE_ODDS: [[f64; 4]; 5] = [
-    [0.95, 0.97, 0.98, 0.99],
-    [0.80, 0.88, 0.93, 0.98],
-    [0.65, 0.80, 0.93, 0.98],
-    [0.50, 0.72, 0.93, 0.98],
-    [0.40, 0.66, 0.93, 0.98],
+    [1.00, 1.00, 1.00, 1.00],
+    [0.93, 0.99, 1.00, 1.00],
+    [0.86, 0.99, 1.00, 1.00],
+    [0.74, 0.91, 0.96, 0.99],
+    [0.66, 0.92, 0.99, 1.00],
 ];

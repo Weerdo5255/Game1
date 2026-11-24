@@ -1365,11 +1365,11 @@ While `state.breach` is `Some`, `Game::tick()` runs one Breach tick (9.5) and no
 
 | Level | cols x rows | removed | Warden hosts | Entry base charge | Root charge | Warden host charge | Neutral charge | Warden growth /s | Warden streams | Trace s | Caches | Amplifiers | Bulwarks |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 3 x 2 | 0 | 1 | 12 | 10 | - | 2 to 4 | 0.85 | 1 | 90 | 1 | 0 | 0 |
-| 2 | 4 x 2 | 0 to 1 | 2 | 14 | 14 | 8 | 3 to 5 | 1.1 | 1 | 90 | 1 | 1 | 0 |
-| 3 | 4 x 3 | 1 to 2 | 3 | 18 | 18 | 10 | 3 to 6 | 1.4 | 2 | 100 | 2 | 1 | 0 |
-| 4 | 5 x 3 | 2 to 3 | 4 | 26 | 22 | 12 | 4 to 7 | 1.55 | 2 | 110 | 2 | 1 | 1 |
-| 5 | 5 x 3 | 0 to 2 | 5 | 38 | 28 | 14 | 4 to 8 | 1.7 | 2 | 120 | 3 | 2 | 1 |
+| 1 | 3 x 2 | 0 | 1 | 20 | 20 | - | 2 to 4 | 0.25 | 1 | 90 | 1 | 0 | 0 |
+| 2 | 4 x 2 | 0 to 1 | 2 | 14 | 14 | 8 | 3 to 5 | 0.45 | 1 | 90 | 1 | 1 | 0 |
+| 3 | 4 x 3 | 1 to 2 | 3 | 18 | 18 | 10 | 3 to 6 | 0.38 | 2 | 100 | 2 | 1 | 0 |
+| 4 | 5 x 3 | 2 to 3 | 4 | 27 | 22 | 12 | 4 to 7 | 0.4 | 2 | 110 | 2 | 1 | 1 |
+| 5 | 5 x 3 | 0 to 2 | 5 | 38 | 28 | 14 | 4 to 8 | 0.3 | 2 | 120 | 3 | 2 | 1 |
 
 The Warden growth column is the Root's rate; Warden hosts other than the Root grow at half of it. A unit test over `BREACH_LEVELS` checks the invariant `entry_base >= 0.45 x (Root charge + (Warden hosts - 1) x Warden host charge)`.
 
@@ -1419,7 +1419,7 @@ Both are fixed rule lists over the board, evaluated host by host in index order.
 |---|---|---|---|
 | BREACH_MIN_FRACTION | 1.0 | BREACH_COMMIT_MAX | 3.0 |
 | BREACH_REFUND_FRACTION | 0.5 | BREACH_LEVEL_STEP | 3 |
-| BREACH_PLAYER_GROWTH | 1.5 /s | BREACH_GROWTH_CAP | 30 |
+| BREACH_PLAYER_GROWTH | 0.4 /s | BREACH_GROWTH_CAP | 30 |
 | BREACH_CHARGE_MAX | 120 | BREACH_MAX_STREAMS | 2 |
 | BREACH_PACKET_PERIOD | 5 ticks | BREACH_PACKET_SPEED | 0.8 board heights /s |
 | BREACH_ROUTINE_PERIOD | 10 ticks | BREACH_WARDEN_PERIOD | 15 ticks |
@@ -1438,7 +1438,7 @@ These are first-pass numbers; the targets below are the acceptance gate. They ar
 
 `BREACH_ROUTINE_ODDS[level][i]` holds the routine's measured win rate at 1.0, 1.5, 2.0 and 3.0 x commit, filled from that measurement; `breach_routine_odds` interpolates linearly between them. The Briefing shows it.
 
-The pacing tests of 7.2 keep their thresholds. The Steward (7.1 rule 8) starts a Breach where it used to infiltrate, with `commit = min(1.5 x min, Compute held)` and `auto = true`; after a lost Breach its next attempt on that node commits `min(3 x min, Compute held)`, and it does not retry a node while Suspicion >= 70. If the pacing tests fail after the Breach numbers meet their targets, change `BREACH_MIN_FRACTION` (within 0.6 to 1.0) and the Steward's factor before anything else.
+The pacing tests of 7.2 keep their thresholds. The Steward (7.1 rule 8) starts a Breach where it used to infiltrate, with `commit = min(1.75 x min, Compute held)` and `auto = true`; after a lost Breach its next attempt on that node commits `min(3 x min, Compute held)`, and it does not retry a node while Suspicion >= 70. If the pacing tests fail after the Breach numbers meet their targets, change `BREACH_MIN_FRACTION` (within 0.6 to 1.0) and the Steward's factor before anything else.
 
 ### 9.9 Rust contract additions
 

@@ -4,14 +4,14 @@ mod common;
 use common::*;
 use sim::bot::{Bot, BotKind, Handicap};
 use sim::breach::{self, build_board};
-use sim::content::{BREACH_LEVELS, NODES};
+use sim::content::{BREACH, BREACH_LEVELS, NODES};
 use sim::save::{load_from_string, save_to_string};
 use sim::*;
 
 // (cols, rows, removed, Warden hosts, entry, Root, Warden host, neutral, streams, Trace s, Caches, Amplifiers, Bulwarks)
 type Row = (usize, usize, (usize, usize), usize, f64, f64, f64, (f64, f64), u8, u32, usize, usize, usize);
 const TABLE: [Row; 5] = [
-    (3, 2, (0, 0), 1, 12.0, 10.0, 0.0, (2.0, 4.0), 1, 90, 1, 0, 0),
+    (3, 2, (0, 0), 1, 20.0, 20.0, 0.0, (2.0, 4.0), 1, 90, 1, 0, 0),
     (4, 2, (0, 1), 2, 14.0, 14.0, 8.0, (3.0, 5.0), 1, 90, 1, 1, 0),
     (4, 3, (1, 2), 3, 18.0, 18.0, 10.0, (3.0, 6.0), 2, 100, 2, 1, 0),
     (5, 3, (2, 3), 4, 27.0, 22.0, 12.0, (4.0, 7.0), 2, 110, 2, 1, 1),
@@ -379,18 +379,19 @@ fn streams_and_emission() {
     let mut b = row(1.0, (HostKind::Relay, Side::Neutral, 9.0), 40.0);
     b.streams = vec![stream(0, 1, 1)];
     let mut fired_at = None;
-    for t in 1..=10 {
+    let gain = BREACH.player_growth / 10.0;
+    for t in 1..=100 {
         let before = b.hosts[0].charge;
         ticks(&mut b, 1);
-        if before + 0.15 >= 2.0 - 1e-9 {
+        if before + gain >= 2.0 - 1e-9 {
             assert_eq!(b.packets.len(), 1, "tick {t}");
-            assert_approx(b.hosts[0].charge, before + 0.15 - 1.0, "one charge spent");
+            assert_approx(b.hosts[0].charge, before + gain - 1.0, "one charge spent");
             fired_at = Some(t);
             break;
         }
         assert_eq!((b.packets.len(), b.streams[0].countdown), (0, 0), "tick {t}");
     }
-    assert_eq!(fired_at, Some(7), "1 + 7 x 0.15 is the first charge of 2 or more");
+    assert_eq!(fired_at, Some((1.0_f64 / gain - 1e-9).ceil() as i32), "the first tick with a charge of 2 or more");
 
     // limits and errors, through the Game
     let star = board(
@@ -494,7 +495,8 @@ fn start_validation_order() {
 
 #[test]
 fn growth() {
-    // level 3: the Root grows 1.4 a second, other Warden hosts 0.7, the player's 1.5; an Amplifier doubles its owner's rate
+    // level 3: the Root grows at the table rate, other Warden hosts at half of it, the player's at
+    // BREACH_PLAYER_GROWTH; an Amplifier doubles its owner's rate
     let mut b = board(
         vec![
             host(HostKind::Entry, Side::Player, 5.0, 0.1, 0.2),
@@ -503,7 +505,7 @@ fn growth() {
             host(HostKind::Relay, Side::Warden, 5.0, 0.7, 0.2),
             host(HostKind::Amplifier, Side::Warden, 5.0, 0.9, 0.2),
             host(HostKind::Root, Side::Warden, 5.0, 0.9, 0.8),
-            host(HostKind::Relay, Side::Player, 29.95, 0.1, 0.8),
+            host(HostKind::Relay, Side::Player, 29.98, 0.1, 0.8),
             host(HostKind::Relay, Side::Player, 30.0, 0.3, 0.8),
             host(HostKind::Bulwark, Side::Warden, 80.0, 0.5, 0.8),
             host(HostKind::Amplifier, Side::Neutral, 5.0, 0.7, 0.8),
@@ -511,14 +513,15 @@ fn growth() {
         &[(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (0, 6), (6, 7), (7, 8), (8, 9), (5, 9)],
     );
     let g = with(1, |s| s.breach = Some(b.clone()));
-    let rates = [1.5, 3.0, 0.0, 0.7, 1.4, 1.4, 1.5, 0.0, 0.0, 0.0];
+    let (p, w) = (BREACH.player_growth, BREACH_LEVELS[2].warden_growth);
+    let rates = [p, 2.0 * p, 0.0, 0.5 * w, w, w, p, 0.0, 0.0, 0.0];
     for (h, &rate) in rates.iter().enumerate() {
         assert_approx(g.breach_host_growth(h as u8), rate, &format!("host {h}"));
     }
     assert_eq!(g.breach_host_growth(40), 0.0);
     assert_eq!(Game::with_pace(1, 1.0).breach_host_growth(0), 0.0);
     ticks(&mut b, 1);
-    let want = [5.15, 5.3, 5.0, 5.07, 5.14, 5.14, 30.0, 30.0, 80.0, 5.0];
+    let want = [5.0 + p / 10.0, 5.0 + p / 5.0, 5.0, 5.0 + w / 20.0, 5.0 + w / 10.0, 5.0 + w / 10.0, 30.0, 30.0, 80.0, 5.0];
     for (h, &charge) in want.iter().enumerate() {
         assert_approx(b.hosts[h].charge, charge, &format!("host {h}"));
     }
@@ -963,7 +966,7 @@ fn the_world_is_frozen() {
 
 #[test]
 fn bots_use_the_routine() {
-    // the Steward commits 1.5 times the minimum and leaves the Breach to the routine
+    // the Steward commits 1.75 times the minimum and leaves the Breach to the routine
     let mut g = leak(3, |s| s.resources = Resources::new(5000.0, 0.0, 5000.0));
     // no operations and no venting, so that nothing else competes for the turn
     let plain = Handicap { no_ops: true, no_vent: true, ..Handicap::default() };
@@ -977,7 +980,7 @@ fn bots_use_the_routine() {
         }
         g.tick();
     }
-    assert_eq!(started, vec![Action::StartBreach { node: NodeId(1), commit: 60.0, auto: true }]);
+    assert_eq!(started, vec![Action::StartBreach { node: NodeId(1), commit: 70.0, auto: true }]);
     // it takes no turn inside the Breach, nor a second one on the world tick the Breach ends on
     let tick = g.state().tick;
     let mut calls = 0;
@@ -1014,7 +1017,7 @@ fn bots_use_the_routine() {
         s.suspicion = 70.0;
         s.ability_cooldowns = [9000; 8];
     });
-    assert_eq!(wary, Some(Action::StartBreach { node: NodeId(2), commit: 60.0, auto: true }));
+    assert_eq!(wary, Some(Action::StartBreach { node: NodeId(2), commit: 70.0, auto: true }));
 
     // a whole run goes through Breaches and still ends on the world clock
     let run = sim::bot::run_bot(5, BotKind::Steward, 1.0, 12);
