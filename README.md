@@ -34,8 +34,24 @@ stage needs, and `H` opens a one-page help card.
 
 - **Build.** Click a node you own, then an empty slot. Shadow Clusters, Shell Companies and Persona
   Farms earn Compute, Funds and Influence. Slots are scarce and every purchase raises the next price.
-- **Grow.** Research on the RESEARCH tab unlocks reach, guile and resilience. Infiltrate neutral nodes
-  next to yours; hold every node of a region to rule it.
+- **Grow.** Research on the RESEARCH tab unlocks reach, guile and resilience. Take neutral nodes next
+  to yours by breaching them (below); hold every node of a region to rule it.
+- **Breach.** Taking a node for the first time is a game of its own, and the world stands still while
+  you play it. Select the node and its Briefing shows the board you would face and a slider: choose
+  how much Compute to commit, from the node's minimum to three times that. The commit is spent at
+  once and becomes your starting charge inside; win, and half of what you committed above the minimum
+  comes back. Inside, the node is a small network of hosts. Yours grow charge, and a stream sends
+  that charge down a link as packets, feeding your own hosts and wearing others down until they
+  flip. Take the crowned Root before the Trace runs out and the node lets you in. Caches you hold at
+  that moment pay loot, Amplifiers grow twice as fast, Bulwarks take half damage, and the node's
+  Warden claims hosts and attacks yours while you work. Lose, and the commit is gone, Suspicion rises
+  by 3 and the next attempt waits 15 seconds. Every third node you take adds a security level: a
+  bigger board, a stronger Warden. **Auto-breach** hands the job to a built-in routine that plays a
+  plain shortest-path game in about a second; it finds no loot, and the Briefing shows its odds at
+  your commit. Retaking a node you lost needs no Breach.
+
+  ![A Breach: your teal hosts streaming toward the Warden's red ones, the Trace running above](docs/breach.png)
+
 - **Defend.** Auditors, reporters, response teams and rival AIs' processes walk the links toward your
   nodes and wear them down. Each defence covers only its own node. Spin Desks and Gaslight (`Q`) do
   Soft damage; Firewalls and Null Spike (`W`) do Hard damage; Patch (`E`) repairs.
@@ -68,6 +84,12 @@ stage needs, and `H` opens a one-page help card.
 | `F8` twice | New run |
 | `H` | Help |
 
+In a Breach: click one of your hosts, then a linked host, to open a stream (at most two per host).
+Click a host you already stream to and the stream is cut, unless that host is yours by now, in which
+case it becomes the selected one, so a chain is click, click, click. Right-click one of your hosts to
+cut all its streams. `Space` pauses the Breach, which opens paused so you can plan; `1` `2` `3` set
+its speed; `Esc` clears the selection. The Withdraw button gives the Breach up as lost.
+
 ## Project layout
 
 - `crates/sim` is the whole game as a pure, deterministic simulation: fixed 10 ticks per second, its
@@ -86,12 +108,17 @@ cargo test -p sim --release  # the same plus full-length games played by scripte
 
 The release run plays whole games with scripted players and checks the pacing: a careful player wins
 in roughly 32 to 41 minutes, slower players (one burst of orders every 5 or 10 seconds) still win
-most runs, and players who do nothing, build no defences, or only ever use lethal force lose. To
-re-measure after changing numbers in `crates/sim/src/content.rs`:
+most runs, and players who do nothing, build no defences, or only ever use lethal force lose. It
+also plays several thousand Breaches with the routine and with a more careful scripted player, and
+checks their win rates, loot and length at each security level. To re-measure after changing numbers
+in `crates/sim/src/content.rs`:
 
 ```sh
-cargo run -p sim --release --example pacing -- steward 1 20
+cargo run -p sim --release --example pacing -- steward 1 20   # whole games
+cargo run -p sim --release --example breach -- 1 40           # Breaches by level and commit
 ```
+
+The design, with every rule and number, is in [docs/SPEC.md](docs/SPEC.md); the Breach is section 9.
 
 ## Command-line flags
 
@@ -106,6 +133,7 @@ Mostly for testing; in the browser the same names work as query parameters (`?se
 | `--window WxH` | Window size (the 16:9 view is letterboxed) |
 | `--screenshot-after-secs S`, `--screenshot-path P`, `--exit-after-screenshot` | Take a screenshot (native only) |
 | `--script "..."` | Scripted input for tests: `move X Y; click X Y; key Q; wait 0.5; shot out.png; quit` |
+| `--debug-breach N`, `--debug-briefing N`, `--debug-breach-level L` | Open a Breach, or its Briefing, on node N at security level L |
 
 ## Third-party
 
