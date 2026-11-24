@@ -153,7 +153,8 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
             ui.tip(r, &format!("Speed {speed}x (key {})", i + 1));
         }
     }
-    if st.paused {
+    // A paused Breach says so in its own header band.
+    if st.paused && game.state().breach.is_none() {
         ui.text_center("PAUSED", L::MAP.x + L::MAP.w * 0.5, L::MAP.y + L::MAP.h - 14.0, HEADER, t.text);
     }
 

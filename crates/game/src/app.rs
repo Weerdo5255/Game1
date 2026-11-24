@@ -1,4 +1,5 @@
 //! UI state and the per-frame routing of input, events and drawing.
+use crate::breach_view::{self, BreachUi};
 use crate::fx::Fx;
 use crate::input::Input;
 use crate::layout as L;
@@ -80,6 +81,8 @@ pub struct UiState {
     pub severed: Vec<u8>,
     /// The Demolish button clicked once (node, slot, wall-clock time): a second click within 2 s confirms.
     pub demolish_armed: Option<(NodeId, u8, f64)>,
+    /// The Breach screen and the Briefing's commit.
+    pub breach: BreachUi,
 }
 
 pub struct App {
@@ -93,6 +96,8 @@ pub struct App {
     f8_at: Option<f64>,
     /// The help card was opened from the title card and closes back to it.
     help_over_title: bool,
+    /// The bot is playing: its Breaches leave the selection and the tab alone.
+    autoplay: bool,
 }
 
 /// The Core is under 30% of its integrity: read from the state, so it holds after a load or a fast-forward.
@@ -139,10 +144,11 @@ impl App {
             told_alarmed: false,
             severed: vec![0; game.state().nodes.len()],
             demolish_armed: None,
+            breach: BreachUi::new(),
         };
         blends(&mut st, stage);
         let card = if flags.wants_title() { Card::Title } else { Card::None };
-        App { st, map: MapView::new(game), fx: Fx::new(), hints: Hints::new(), card, ended_at: None, f8_at: None, help_over_title: false }
+        App { st, map: MapView::new(game), fx: Fx::new(), hints: Hints::new(), card, ended_at: None, f8_at: None, help_over_title: false, autoplay: flags.autoplay }
     }
 
     /// Log lines of events that happened before the first frame (fast-forward).
@@ -160,6 +166,7 @@ impl App {
         st.picker = false;
         st.open_slot = None;
         st.demolish_armed = None;
+        st.breach = BreachUi::new();
         st.selected = st.selected.filter(|n| loaded && n.index() < game.state().nodes.len());
         st.hover_tech = None;
         st.ping = None;
@@ -203,7 +210,58 @@ impl App {
         }
     }
 
-    /// Ticks per 0.1 s of wall-clock time: 0 while paused.
+    /// Keeps the screen in step with `state.breach`, whatever started or ended it (an order, the routine,
+    /// the bot, a load). Called at both ends of a frame, so a Breach begun by a click this frame is
+    /// paused before the next step.
+    fn follow_breach(&mut self, game: &Game) {
+        let s = game.state();
+        let now = s.breach.as_ref().map(|b| (b.node, s.breach_attempts));
+        if self.st.breach.active == now {
+            return;
+        }
+        if let Some((node, _)) = self.st.breach.active.take() {
+            self.leave_breach(node);
+        }
+        if let Some(b) = &s.breach {
+            let st = &mut self.st;
+            st.breach.begin();
+            st.breach.active = now;
+            st.breach.world = (st.paused, st.speed);
+            st.armed = None;
+            st.picker = false;
+            st.hover_node = None;
+            st.hover_unit = None;
+            self.fx.hide_map = true;
+            // Pause first: a manual Breach opens stopped at 1x, so no Trace runs before the first order.
+            if !b.auto {
+                st.paused = true;
+                st.speed = 1;
+            }
+        }
+    }
+
+    /// The Breach on screen is over: back to the world as it was left, looking at the breached node.
+    /// The result card of a manual Breach and the routine's toast attach here: this frame's
+    /// `st.events` holds the `BreachEnded`, and `st.breach.last` the last board drawn.
+    fn leave_breach(&mut self, node: NodeId) {
+        let st = &mut self.st;
+        (st.paused, st.speed) = st.breach.world;
+        st.breach.selected = None;
+        st.breach.withdraw_armed = false;
+        st.breach.refused = None;
+        self.fx.hide_map = false;
+        if !self.autoplay {
+            st.selected = Some(node);
+            st.tab = Tab::Node;
+        }
+    }
+
+    /// The routine plays unless a card holds the game still.
+    pub fn routine_runs(&self) -> bool {
+        self.card == Card::None
+    }
+
+    /// Ticks per 0.1 s of wall-clock time: 0 while paused. During a Breach these are Breach ticks.
     pub fn sim_speed(&self) -> u32 {
         if self.st.paused || self.card != Card::None {
             0
@@ -223,6 +281,7 @@ impl App {
             }
         }
         self.st.core_alarm = core_alarm(game);
+        self.follow_breach(game);
         // Every sim event passes through here once: the log, then the effects, then the autosave.
         panels::log::ingest(&mut self.st);
         self.fx.ingest(ui, &self.st, game, &self.map);
@@ -253,7 +312,8 @@ impl App {
         let modal = self.card != Card::None;
         let real_input = modal.then(|| std::mem::replace(&mut ui.input, Input { mouse: vec2(-1000.0, -1000.0), ..Default::default() }));
 
-        // Keys.
+        // Keys. During a Breach the pause and the speed are the Breach's own; tabs and abilities sleep.
+        let in_breach = game.state().breach.is_some();
         if ui.input.key(KeyCode::Space) {
             st.paused = !st.paused;
         }
@@ -264,14 +324,19 @@ impl App {
             }
         }
         for (key, tab) in [(KeyCode::F1, Tab::Node), (KeyCode::F2, Tab::Research), (KeyCode::F3, Tab::Humans), (KeyCode::F4, Tab::Rivals)] {
-            if ui.input.key(key) {
+            if ui.input.key(key) && !in_breach {
                 st.tab = tab;
             }
         }
-        if ui.input.key(KeyCode::Tab) {
+        if ui.input.key(KeyCode::Tab) && !in_breach {
             st.tab = Tab::ALL[(st.tab.index() + 1) % 4];
         }
-        if ui.input.key(KeyCode::Escape) || ui.input.right_pressed {
+        if in_breach {
+            // Esc clears the host selection, then closes a Withdraw confirmation; it never withdraws.
+            if ui.input.key(KeyCode::Escape) && st.breach.selected.take().is_none() {
+                st.breach.withdraw_armed = false;
+            }
+        } else if ui.input.key(KeyCode::Escape) || ui.input.right_pressed {
             if st.armed.is_some() {
                 st.armed = None;
             } else if st.picker {
@@ -300,7 +365,7 @@ impl App {
         // Map hover and selection. Units win over nodes so a sieging unit can be inspected.
         st.hover_node = None;
         st.hover_unit = None;
-        if ui.input.over(MapView::hit_area()) {
+        if !in_breach && ui.input.over(MapView::hit_area()) {
             st.hover_unit = self.map.unit_at(game, ui.input.mouse, lerp, ui.time);
             if st.hover_unit.is_none() {
                 st.hover_node = self.map.node_at(ui.input.mouse);
@@ -314,31 +379,45 @@ impl App {
             }
         }
 
-        self.map.draw(ui, st, game);
-        self.fx.draw_map(ui, st, game, &self.map);
-        if let Some(at) = self.ended_at {
-            overlay::end_backdrop(ui, game, &self.map, (ui.time - at) as f32, false);
+        if in_breach {
+            // The board takes the map rectangle, tracker strip included, and the Breach panel the side column.
+            breach_view::draw_board(ui, st, game);
+            panels::topbar::draw(ui, st, game);
+            breach_view::draw_panel(ui, st, game);
+        } else {
+            self.map.draw(ui, st, game);
+            self.fx.draw_map(ui, st, game, &self.map);
+            if let Some(at) = self.ended_at {
+                overlay::end_backdrop(ui, game, &self.map, (ui.time - at) as f32, false);
+            }
+            panels::abilities::targeting(ui, st, game, &self.map);
+            panels::tracker::draw(ui, st, game);
+            panels::topbar::draw(ui, st, game);
+            if let Some(i) = ui.tabs(L::SIDE_TABS, &text::TAB_NAMES, st.tab.index()) {
+                st.tab = Tab::ALL[i];
+            }
+            match st.tab {
+                Tab::Node => panels::node::draw(ui, st, game),
+                Tab::Research => panels::research::draw(ui, st, game),
+                Tab::Humans => panels::humans::draw(ui, st, game),
+                Tab::Rivals => panels::rivals::draw(ui, st, game),
+            }
         }
-        panels::abilities::targeting(ui, st, game, &self.map);
-        panels::tracker::draw(ui, st, game);
-        panels::topbar::draw(ui, st, game);
-        if let Some(i) = ui.tabs(L::SIDE_TABS, &text::TAB_NAMES, st.tab.index()) {
-            st.tab = Tab::ALL[i];
-        }
-        match st.tab {
-            Tab::Node => panels::node::draw(ui, st, game),
-            Tab::Research => panels::research::draw(ui, st, game),
-            Tab::Humans => panels::humans::draw(ui, st, game),
-            Tab::Rivals => panels::rivals::draw(ui, st, game),
-        }
+        // Under the veil the bottom panels are drawn and explain themselves on hover, but take no click or key.
+        let mouse = ui.input.mouse;
+        let veiled = in_breach.then(|| std::mem::replace(&mut ui.input, Input { mouse, ..Default::default() }));
         panels::directive::draw(ui, st, game);
         panels::log::draw(ui, st, game);
         panels::abilities::draw(ui, st, game);
         panels::threat::draw(ui, st, game);
-        if st.armed.is_none() && (st.hover_node.is_some() || st.hover_unit.is_some()) {
+        if let Some(input) = veiled {
+            ui.input = input;
+            breach_view::veil(ui);
+        }
+        if !in_breach && st.armed.is_none() && (st.hover_node.is_some() || st.hover_unit.is_some()) {
             self.map.tooltip(ui, st, game);
         }
-        if !modal && st.armed.is_none() {
+        if !modal && !in_breach && st.armed.is_none() {
             self.hints.draw(ui, st, game, &self.map);
         }
         self.fx.draw_ui(ui, st, game, &self.map);
@@ -365,6 +444,10 @@ impl App {
         }
         if open_help && self.card == Card::None {
             self.card = Card::Help;
+            // Help pauses a Breach: its clock is the one the player is racing.
+            if game.state().breach.is_some() {
+                st.paused = true;
+            }
         }
         if title_help && self.card == Card::Title {
             self.card = Card::Help;
@@ -374,5 +457,6 @@ impl App {
         if let Some(request) = self.st.request.take() {
             self.perform(ui, game, request);
         }
+        self.follow_breach(game);
     }
 }

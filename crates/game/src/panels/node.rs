@@ -1,13 +1,14 @@
-use super::{act, act_frame, check, fit};
+use super::{act, act_frame, check, fit, hatch};
+use crate::breach_view;
 use crate::app::{Tab, UiState};
 use crate::layout as L;
 use crate::shapes;
 use crate::text;
 use crate::theme::{alpha, lerp_color};
-use crate::ui::{fmt_price, fmt_secs, Ui, BODY, DENSE, HEADER, SMALL};
+use crate::ui::{fmt_num, fmt_price, fmt_secs, Ui, BODY, DENSE, HEADER, SMALL};
 use macroquad::prelude::*;
-use sim::content::{node_yield, weight_of, BUILDINGS, FACTIONS, NODES, REGIONS, RIVALS, TUNING};
-use sim::{Action, BuildingKind, Game, NodeId, NodeKind, NodeState, Owner, SourceId};
+use sim::content::{node_yield, weight_of, BREACH, BUILDINGS, FACTIONS, NODES, REGIONS, RIVALS, TUNING};
+use sim::{Action, BreachPreview, BuildingKind, Game, NodeId, NodeKind, NodeState, Owner, Resource, SourceId};
 
 pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let t = ui.theme;
@@ -40,7 +41,7 @@ pub fn draw(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     ui.text_right(state, x + w, r.y + 42.0, DENSE, if ns.severed { t.danger } else { owner_col });
     match ns.owner {
         Owner::Player => owned(ui, st, game, n, &ns),
-        Owner::Neutral => neutral(ui, game, n, &ns),
+        Owner::Neutral => neutral(ui, st, game, n, &ns),
         Owner::Hostile => hostile(ui, st, game, n),
     }
 }
@@ -180,44 +181,152 @@ fn owned(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId, ns: &NodeSta
     }
 }
 
-fn neutral(ui: &mut Ui, game: &mut Game, n: NodeId, ns: &NodeState) {
+fn neutral(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId, ns: &NodeState) {
     let t = ui.theme;
     let r = L::SIDE_BODY;
     let (x, w) = (r.x + 8.0, r.w - 16.0);
     let def = &NODES[n.index()];
+    let channel = game.state().infiltration.clone().filter(|i| i.node == n);
+    // A first-time node is breached, not infiltrated; once the Breach is won its channel shows as before.
+    if channel.is_none() {
+        if let Some(preview) = game.breach_preview(n) {
+            briefing(ui, st, game, n, &preview);
+            return;
+        }
+    }
     ui.text(&yield_line(def.kind), x, r.y + 66.0, DENSE, t.text);
     ui.text(&format!("{} slots, Dominion weight {}", ns.slots.len(), weight_of(def.kind)), x, r.y + 84.0, DENSE, t.dim);
     let mut y = r.y + 96.0;
-    let infil = game.state().infiltration.clone();
-    if let Some(inf) = infil.filter(|i| i.node == n) {
+    if let Some(inf) = channel {
         let bar = Rect::new(x, y, w, 16.0);
         ui.bar(bar, 1.0 - inf.ticks_left as f32 / inf.ticks_total.max(1) as f32, t.teal_dim);
         ui.text_in(&format!("{} {}", if inf.retake { "Retaking:" } else { "Infiltrating:" }, fmt_secs(inf.ticks_left as f64 / 10.0)), bar, SMALL, t.text);
         y += 24.0;
+        if game.needs_breach(n) {
+            ui.text_wrapped("The Breach is won. The node joins you when this channel completes.", x, y + 14.0, DENSE, w, 17.0, t.dim);
+            return;
+        }
     }
     let cost = game.infiltration_cost(n);
     let secs = game.infiltration_secs(n);
     let (label, body) = if ns.severed {
-        ("Retake", "Retake\nBrings a severed node back at full integrity. No Suspicion.".to_owned())
+        ("Retake", "Retake\nBrings a severed node back at full integrity. No Suspicion. The old credentials still work: no Breach.".to_owned())
     } else {
         let susp = if def.kind == NodeKind::Stronghold { TUNING.stronghold_infil_suspicion } else { TUNING.infil_suspicion };
-        ("Infiltrate", format!("Infiltrate\nOn completion the node is yours at full integrity. Suspicion +{}. One infiltration at a time.", text::amount(susp)))
+        let compliant = if ns.compliant { format!("\n{}", text::INFILTRATE_COMPLIANT) } else { String::new() };
+        ("Infiltrate", format!("Infiltrate\nOn completion the node is yours at full integrity. Suspicion +{}. One infiltration at a time.{compliant}", text::amount(susp)))
     };
     let tip = format!("{body}\nCost {}. Takes {}.", text::cost_long(&cost), fmt_secs(secs));
-    // placeholder until the Briefing exists: a first-time node goes to the routine at the minimum commit
-    let action = match game.breach_preview(n) {
-        Some(p) => Action::StartBreach { node: n, commit: p.min_commit, auto: true },
-        None => Action::Infiltrate { node: n },
-    };
-    act(ui, game, Rect::new(x, y, w, 46.0), label, &format!("{}, {}", text::cost_text(&cost), fmt_secs(secs)), &tip, action);
+    act(ui, game, Rect::new(x, y, w, 46.0), label, &format!("{}, {}", text::cost_text(&cost), fmt_secs(secs)), &tip, Action::Infiltrate { node: n });
     let hint = if ns.severed {
         "This node was yours. Its buildings lost a level when it was severed."
-    } else if ns.compliant {
-        "A Compliant Stronghold: its faction is captured, so it can be infiltrated like any neutral node."
     } else {
-        "Neutral nodes linked to one of yours can be infiltrated. Enemies walk through them freely."
+        "A Compliant Stronghold: its faction is captured, so it can be infiltrated like any neutral node."
     };
     ui.text_wrapped(hint, x, y + 68.0, DENSE, w, 17.0, t.dim);
+}
+
+/// The Briefing of SPEC 9.11: what the Breach of this node will look like and how much to commit.
+fn briefing(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId, p: &BreachPreview) {
+    let t = ui.theme;
+    let r = L::SIDE_BODY;
+    let (x, w) = (r.x + 8.0, r.w - 16.0);
+    let def = &NODES[n.index()];
+    ui.text(&yield_line(def.kind), x, r.y + 62.0, DENSE, t.text);
+    ui.text_right(&format!("weight {}", weight_of(def.kind)), x + w, r.y + 62.0, DENSE, t.dim);
+
+    ui.text("SECURITY", x, r.y + 80.0, SMALL, t.dim);
+    let after = breach_view::security_pips(ui, x + 58.0, r.y + 70.0, p.level);
+    let reasons: Vec<String> = p.level_reasons.iter().enumerate().map(|(i, &(v, why))| if i == 0 { format!("{why} {v}") } else { format!("{why} {v:+}") }).collect();
+    ui.text(&fit(ui, &reasons.join(", "), SMALL, x + w - after - 6.0), after + 6.0, r.y + 80.0, SMALL, t.dim);
+
+    // The commit: remembered per node, kept inside what the node takes and what is held.
+    let held = game.state().resources.get(Resource::Compute);
+    let (min, max) = (p.min_commit, p.max_commit);
+    let top = max.min(held.floor()).max(min);
+    let mut commit = match st.breach.commit {
+        Some((node, c)) if node == n => c,
+        _ => min,
+    }
+    .clamp(min, top);
+
+    let thumb = Rect::new(x + 8.0, r.y + 88.0, 368.0, 150.0);
+    breach_view::thumbnail(ui, thumb, &p.board, game.breach_entry_charge(n, commit));
+    let loot: Vec<String> = p.loot.iter().map(|&l| breach_view::loot_short(l)).collect();
+    let caches = if loot.is_empty() { "no Caches".to_owned() } else { format!("Caches: {}", loot.join(", ")) };
+    ui.text(&fit(ui, &format!("Trace {}. {caches}", fmt_secs(p.trace_secs)), DENSE, w), x, r.y + 256.0, DENSE, t.text);
+
+    let track = Rect::new(x, r.y + 266.0, w, 18.0);
+    let c = |v: f64| fmt_price(v);
+    if held < min {
+        st.breach.dragging = false;
+        ui.text_wrapped(&format!("Need {} C to get in the door (you hold {}).", c(min), fmt_num(held)), x, track.y + 14.0, DENSE, w, 17.0, t.danger);
+    } else if top <= min {
+        st.breach.dragging = false;
+        ui.text(&format!("All {} C: the minimum for this node", c(min)), x, track.y + 14.0, DENSE, t.text);
+    } else {
+        // The slider runs from the minimum to the maximum; the part above the Compute held is hatched.
+        let frac = |v: f64| ((v - min) / (max - min)) as f32;
+        draw_rectangle(track.x, track.y + 5.0, track.w, 8.0, lerp_color(t.panel, t.black, 0.45));
+        draw_rectangle(track.x, track.y + 5.0, track.w * frac(commit), 8.0, t.teal_dim);
+        draw_rectangle_lines(track.x, track.y + 5.0, track.w, 8.0, 1.0, t.border);
+        if top < max {
+            let locked = Rect::new(track.x + track.w * frac(top), track.y + 2.0, track.w * (1.0 - frac(top)), 14.0);
+            draw_rectangle(locked.x, locked.y, locked.w, locked.h, alpha(t.black, 0.45));
+            hatch(locked, alpha(t.dim, 0.6));
+            if ui.hovered(locked) {
+                ui.tip(locked, &format!("You hold {} C", fmt_num(held)));
+            }
+        }
+        if ui.clicked(track) {
+            st.breach.dragging = true;
+        }
+        if !ui.input.left_down {
+            st.breach.dragging = false;
+        }
+        if st.breach.dragging {
+            let f = ((ui.input.mouse.x - track.x) / track.w).clamp(0.0, 1.0) as f64;
+            commit = (min + f * (max - min)).round().clamp(min, top);
+        }
+        let kx = track.x + track.w * frac(commit);
+        draw_rectangle(kx - 4.0, track.y, 8.0, 18.0, if st.breach.dragging || ui.hovered(track) { t.teal } else { t.text });
+        let quick = [("Min", min), ("Half-way", (min + top) / 2.0), ("Max", top)];
+        let bw = (w - 8.0) / 3.0;
+        for (i, (label, v)) in quick.into_iter().enumerate() {
+            let br = Rect::new(x + (bw + 4.0) * i as f32, r.y + 290.0, bw, 22.0);
+            if ui.button_ex(br, label, DENSE, true, (commit - v).abs() < 0.5) {
+                commit = v;
+            }
+            if ui.hovered(br) {
+                ui.tip(br, &format!("{label}\nCommit {} C.", c(v)));
+            }
+        }
+    }
+    st.breach.commit = Some((n, commit));
+
+    let mut y = r.y + 330.0;
+    if held >= min {
+        let share = if held > 0.0 { commit / held * 100.0 } else { 0.0 };
+        let plus = if p.influence > 0.0 { format!(", plus {} I", c(p.influence)) } else { String::new() };
+        let live = format!("Commit {} C of {} held ({share:.0}%), {} x minimum -> {} packets at the Entry{plus}", c(commit), fmt_num(held), text::amount(commit / min.max(1e-9)), game.breach_entry_charge(n, commit));
+        y = ui.text_wrapped(&live, x, y, DENSE, w, 17.0, t.text);
+    }
+    ui.text_wrapped(text::BRIEFING_ADVICE, x, y + 2.0, SMALL, w, 15.0, t.dim);
+
+    // Breach and Auto-breach: enabled and explained by `can_apply`, like every other control.
+    let cooldown = game.breach_cooldown_secs();
+    let wait = (cooldown > 0.0).then(|| format!("ready in {}", fmt_secs(cooldown)));
+    let bw = (w - 6.0) / 2.0;
+    let by = r.y + r.h - 62.0;
+    let manual = Action::StartBreach { node: n, commit, auto: false };
+    let routine = Action::StartBreach { node: n, commit, auto: true };
+    let sub = wait.clone().unwrap_or_else(|| "you give the orders".to_owned());
+    let tip = format!("Breach\nThe world stops and you fight this node's Warden for its Root. Win and the node is infiltrated as usual; lose and the commit is gone, Suspicion +{}, and the next Breach waits {}.", text::amount(BREACH.fail_suspicion), fmt_secs(BREACH.cooldown_secs));
+    act(ui, game, Rect::new(x, by, bw, 46.0), "Breach", &sub, &tip, manual);
+    let odds = game.breach_routine_odds(n, commit) * 100.0;
+    let sub = wait.unwrap_or_else(|| format!("routine odds about {odds:.0}%, no loot"));
+    let tip = "Auto-breach\nThe built-in routine plays it for you in about a second. It takes the shortest path to the Root and pays no loot.";
+    act(ui, game, Rect::new(x + bw + 6.0, by, bw, 46.0), "Auto-breach", &sub, tip, routine);
 }
 
 fn hostile(ui: &mut Ui, st: &mut UiState, game: &mut Game, n: NodeId) {

@@ -82,8 +82,8 @@ pub fn phase_name(p: RivalPhase) -> &'static str {
 // Names, costs and descriptions.
 
 use crate::ui::{fmt_num, fmt_price, fmt_secs};
-use sim::content::{BUILDINGS, HEADLINES, NODES, OPS, REGIONS, TECHS, TUNING, UNITS};
-use sim::{ActionError, BuildingKind, Cost, DirectiveId, Event, FactionId, GainCause, HeadlineId, LeverageCause, LossReason, NodeId, OddsFactor, OpKind, OpTarget, RivalId, SortieKind, TechId, UnitKind, Verb};
+use sim::content::{BREACH, BUILDINGS, HEADLINES, NODES, OPS, REGIONS, TECHS, TUNING, UNITS};
+use sim::{ActionError, BreachEnd, BuildingKind, HostKind, Side, Cost, DirectiveId, Event, FactionId, GainCause, HeadlineId, LeverageCause, LossReason, NodeId, OddsFactor, OpKind, OpTarget, RivalId, SortieKind, TechId, UnitKind, Verb};
 
 pub const COLUMN_NAMES: [&str; 3] = ["REACH", "GUILE", "SPINE"];
 pub const NOT_AUTHORISED: &str = "NOT AUTHORISED";
@@ -287,13 +287,93 @@ pub fn error_text(e: &ActionError) -> String {
         E::BreachActive => "World paused: Breach in progress.".to_owned(),
         E::NoBreach => "No Breach is running.".to_owned(),
         E::BreachRequired { node } => format!("{} has to be breached first.", node_name(*node)),
-        E::BadCommit { min, max } => format!("Commit between {} and {} Compute.", fmt_num(*min), fmt_num(*max)),
+        E::BadCommit { min, max } => format!("Commit between {} and {} Compute.", fmt_price(*min), fmt_price(*max)),
         E::HostNotYours => "That host is not yours.".to_owned(),
-        E::NotLinked => "Those hosts are not linked.".to_owned(),
-        E::StreamLimit => "Two streams already. Right-click to clear them.".to_owned(),
-        E::NoStream => "There is no stream there.".to_owned(),
+        E::NotLinked => "No link joins those two hosts.".to_owned(),
+        E::StreamLimit => format!("{} streams already. Right-click to clear them.", count_word(BREACH.max_streams)),
+        E::NoStream => "There is no stream there to cut.".to_owned(),
     }
 }
+
+fn count_word(n: u8) -> String {
+    match n {
+        1 => "One".to_owned(),
+        2 => "Two".to_owned(),
+        3 => "Three".to_owned(),
+        n => n.to_string(),
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The Breach (SPEC section 9).
+
+pub fn side_name(s: Side) -> &'static str {
+    match s {
+        Side::Player => "yours",
+        Side::Warden => "the Warden's",
+        Side::Neutral => "neutral",
+    }
+}
+pub fn host_kind_name(k: HostKind) -> &'static str {
+    match k {
+        HostKind::Entry => "Entry",
+        HostKind::Root => "Root",
+        HostKind::Relay => "Relay",
+        HostKind::Cache => "Cache",
+        HostKind::Amplifier => "Amplifier",
+        HostKind::Bulwark => "Bulwark",
+    }
+}
+pub fn host_kind_text(k: HostKind) -> &'static str {
+    match k {
+        HostKind::Entry => "where you came in",
+        HostKind::Root => "take it and the node lets you in",
+        HostKind::Relay => "a plain host",
+        HostKind::Cache => "pays its loot if you hold it when you win",
+        HostKind::Amplifier => "grows at twice its owner's rate",
+        HostKind::Bulwark => "hostile packets do half damage",
+    }
+}
+/// The legend's few words for a host kind.
+pub fn host_kind_short(k: HostKind) -> &'static str {
+    match k {
+        HostKind::Entry => "your way in",
+        HostKind::Root => "take it to win",
+        HostKind::Relay => "plain",
+        HostKind::Cache => "loot if held",
+        HostKind::Amplifier => "grows double",
+        HostKind::Bulwark => "half damage",
+    }
+}
+// The result card's headings are built on this.
+#[allow(dead_code)]
+pub fn breach_end_name(e: BreachEnd) -> &'static str {
+    match e {
+        BreachEnd::RootCaptured => "let in",
+        BreachEnd::Traced => "traced out",
+        BreachEnd::Overrun => "shown out",
+        BreachEnd::Withdrawn => "withdrawn",
+    }
+}
+pub const WORLD_PAUSED: &str = "WORLD PAUSED";
+pub const BREACH_PAUSED: &str = "PAUSED: give orders, then press Space";
+pub const BREACH_RUNNING: &str = "Take the crowned Root before the Trace runs out.";
+pub const BREACH_ROUTINE_PLAYING: &str = "The routine is playing this one.";
+pub const BREACH_TRACE_NOTE: &str = "When the Trace fills you are thrown out.";
+pub const BREACH_SELECT_FIRST: &str = "Click one of your own hosts first.";
+pub const BREACH_OBJECTIVE: &str = "Capture the crowned Root before the Trace runs out. Your hosts grow charge; streams spend it as packets that feed your hosts and wear the others down until they flip.";
+pub const BREACH_NO_LOOT: &str = "The routine has played: this Breach pays no loot.";
+pub const BREACH_CONTROLS: [&str; 3] = [
+    "Click your host, then a linked host: open a stream.",
+    "Click a host it already streams to: cut that stream.",
+    "Right-click your host: cut all its streams.",
+];
+pub const BREACH_PAUSE_TIP: &str = "Pause (Space)\nThe Trace stops while the Breach is paused, and every order still goes through.";
+pub const BREACH_ROUTINE_TIP: &str = "Let the routine finish\nThe built-in routine plays the shortest path to the Root, in about a second. A Breach it has touched pays no loot.";
+pub const BREACH_ROUTINE_WARNING: &str = "No loot once the routine has played.";
+pub const BREACH_WITHDRAW_TIP: &str = "Withdraw\nEnds the Breach as lost: the commit is gone and the cooldown applies. Click twice to confirm; Esc backs out.";
+pub const BRIEFING_ADVICE: &str = "Low: cheap, expect to take the Root only. High: force to spare for the Caches; half the excess comes back if you win.";
+pub const INFILTRATE_COMPLIANT: &str = "Compliant: no Warden left to fight.";
 
 // ---------------------------------------------------------------------------------------------
 // The log (SPEC section 8). DOORMAT's voice.

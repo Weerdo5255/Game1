@@ -218,6 +218,11 @@ impl Ui {
         self.tip = s.split('\n').enumerate().map(|(i, l)| (l.to_owned(), if i == 0 { a } else { b })).collect();
         self.tip_anchor = Some(r);
     }
+    /// As `tip`, from lines already coloured.
+    pub fn tip_lines(&mut self, r: Rect, lines: Vec<(String, Color)>) {
+        self.tip = lines;
+        self.tip_anchor = Some(r);
+    }
     /// As `tip`, with a final red line (the rendered ActionError of a disabled control).
     pub fn tip_err(&mut self, r: Rect, s: &str, err: &str) {
         self.tip(r, s);

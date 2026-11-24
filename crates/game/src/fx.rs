@@ -134,6 +134,8 @@ pub struct Fx {
     takeover_line: Option<(NodeId, NodeId)>,
     /// Text, success and birth time of the Save / Load note.
     note: Option<(String, bool, f64)>,
+    /// A Breach covers the map: effects anchored to it are not drawn (they keep their age).
+    pub hide_map: bool,
 }
 
 fn readout(r: Resource) -> Vec2 {
@@ -189,6 +191,7 @@ impl Fx {
             seed: 0.0,
             takeover_line: None,
             note: None,
+            hide_map: false,
         }
     }
 
@@ -757,7 +760,7 @@ impl Fx {
         let top = L::TRACKER.y + L::TRACKER.h + 3.0;
         for f in &self.floaters {
             let age = (ui.time - f.t0) as f32;
-            if age < 0.0 {
+            if age < 0.0 || self.hide_map && !f.at.on_screen() {
                 continue;
             }
             let p = age / f.life;
@@ -809,7 +812,7 @@ impl Fx {
         }
 
         // The banner fades in and out inside the map, in a band under the tracker that leaves the Core clear.
-        if let Some(b) = self.banners.iter().find(|b| ui.time >= b.t0) {
+        if let Some(b) = self.banners.iter().find(|b| ui.time >= b.t0).filter(|_| !self.hide_map) {
             let age = (ui.time - b.t0) as f32;
             let a = (age / 0.25).min(1.0) * ((BANNER_LIFE - age) / 0.5).clamp(0.0, 1.0);
             let m = L::MAP;
