@@ -42,6 +42,8 @@ pub struct Flags {
     /// Visual-test only: open a manual Breach on this node at start-up, optionally at a forced security level.
     pub debug_breach: Option<u8>,
     pub debug_breach_level: Option<u8>,
+    /// Visual-test only: the same doctored state with the Breach not started, the node selected: its Briefing.
+    pub debug_briefing: Option<u8>,
 }
 
 impl Flags {
@@ -64,6 +66,7 @@ impl Flags {
             debug_fx: false,
             debug_breach: None,
             debug_breach_level: None,
+            debug_briefing: None,
         };
         let mut i = 0;
         while i < args.len() {
@@ -96,6 +99,7 @@ impl Flags {
                 "debug-stage" => f.debug_stage = value.parse().ok(),
                 "debug-breach" => f.debug_breach = value.parse().ok(),
                 "debug-breach-level" => f.debug_breach_level = value.parse().ok(),
+                "debug-briefing" => f.debug_briefing = value.parse().ok(),
                 "debug-own" => f.debug_own = value.split(',').filter_map(|v| v.trim().parse().ok()).collect(),
                 "window" => {
                     if let Some((w, h)) = value.split_once('x') {
@@ -111,7 +115,7 @@ impl Flags {
 
     /// The title card opens a normal start; anything that skips ahead or takes pictures goes straight in.
     pub fn wants_title(&self) -> bool {
-        !self.autoplay && !self.debug_fx && self.fast_forward_secs <= 0.0 && self.screenshot_after_secs.is_none() && self.debug_stage.is_none() && self.debug_own.is_empty() && self.debug_breach.is_none()
+        !self.autoplay && !self.debug_fx && self.fast_forward_secs <= 0.0 && self.screenshot_after_secs.is_none() && self.debug_stage.is_none() && self.debug_own.is_empty() && self.debug_breach.is_none() && self.debug_briefing.is_none()
     }
 }
 
@@ -155,8 +159,9 @@ fn debug_state(game: &Game, flags: &Flags) -> Game {
 
 /// Opens a manual Breach on `node` from a doctored state: whatever `can_apply` asks for (stage, research,
 /// an owned neighbour, the price) is handed over, and the security level is forced by setting how many
-/// nodes have been infiltrated. Never used in normal play.
-fn debug_breach(game: &Game, node: u8, level: Option<u8>) -> Game {
+/// nodes have been infiltrated. With `start` off the Breach is left for the Briefing to start. Never used
+/// in normal play.
+fn debug_breach(game: &Game, node: u8, level: Option<u8>, start: bool) -> Game {
     use sim::content::{BREACH, LINKS};
     use sim::{Action, ActionError as E, NodeId, Owner};
     let n = NodeId(node);
@@ -180,10 +185,12 @@ fn debug_breach(game: &Game, node: u8, level: Option<u8>) -> Game {
     for _ in 0..16 {
         let mut doctored = Game::from_state(state.clone());
         let Some(p) = doctored.breach_preview(n) else { break };
-        let start = Action::StartBreach { node: n, commit: (p.min_commit + p.max_commit) / 2.0, auto: false };
-        match doctored.can_apply(&start) {
+        let order = Action::StartBreach { node: n, commit: (p.min_commit + p.max_commit) / 2.0, auto: false };
+        match doctored.can_apply(&order) {
             Ok(()) => {
-                let _ = doctored.apply(start);
+                if start {
+                    let _ = doctored.apply(order);
+                }
                 return doctored;
             }
             Err(E::StageLocked { needed }) => state.stage = needed,
@@ -259,7 +266,12 @@ async fn main() {
         game = debug_state(&game, &flags);
     }
     if let Some(node) = flags.debug_breach {
-        game = debug_breach(&game, node, flags.debug_breach_level);
+        game = debug_breach(&game, node, flags.debug_breach_level, true);
+    }
+    let mut flags = flags;
+    if let Some(node) = flags.debug_briefing {
+        game = debug_breach(&game, node, flags.debug_breach_level, false);
+        flags.select_node = Some(node);
     }
 
     let mut app = App::new(&flags, &game);

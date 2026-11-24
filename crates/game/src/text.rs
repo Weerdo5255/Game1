@@ -83,7 +83,7 @@ pub fn phase_name(p: RivalPhase) -> &'static str {
 
 use crate::ui::{fmt_num, fmt_price, fmt_secs};
 use sim::content::{BREACH, BUILDINGS, HEADLINES, NODES, OPS, REGIONS, TECHS, TUNING, UNITS};
-use sim::{ActionError, BreachEnd, BuildingKind, HostKind, Side, Cost, DirectiveId, Event, FactionId, GainCause, HeadlineId, LeverageCause, LossReason, NodeId, OddsFactor, OpKind, OpTarget, RivalId, SortieKind, TechId, UnitKind, Verb};
+use sim::{ActionError, BreachEnd, BuildingKind, HostKind, Loot, Side, Cost, DirectiveId, Event, FactionId, GainCause, HeadlineId, LeverageCause, LossReason, NodeId, OddsFactor, OpKind, OpTarget, RivalId, SortieKind, TechId, UnitKind, Verb};
 
 pub const COLUMN_NAMES: [&str; 3] = ["REACH", "GUILE", "SPINE"];
 pub const NOT_AUTHORISED: &str = "NOT AUTHORISED";
@@ -345,8 +345,7 @@ pub fn host_kind_short(k: HostKind) -> &'static str {
         HostKind::Bulwark => "half damage",
     }
 }
-// The result card's headings are built on this.
-#[allow(dead_code)]
+/// How a Breach ended, in two words: the toast uses it as it is and the result card in capitals.
 pub fn breach_end_name(e: BreachEnd) -> &'static str {
     match e {
         BreachEnd::RootCaptured => "let in",
@@ -372,6 +371,54 @@ pub const BREACH_PAUSE_TIP: &str = "Pause (Space)\nThe Trace stops while the Bre
 pub const BREACH_ROUTINE_TIP: &str = "Let the routine finish\nThe built-in routine plays the shortest path to the Root, in about a second. A Breach it has touched pays no loot.";
 pub const BREACH_ROUTINE_WARNING: &str = "No loot once the routine has played.";
 pub const BREACH_WITHDRAW_TIP: &str = "Withdraw\nEnds the Breach as lost: the commit is gone and the cooldown applies. Click twice to confirm; Esc backs out.";
+pub const BREACH_CACHE_LOST: &str = "Cache lost";
+pub const BREACH_CALLOUT_FIRST: &str = "Click your host, then click this one";
+pub const BREACH_CALLOUT_SECOND: &str = "Streams drain the sender. Take the crowned Root before the Trace runs out.";
+pub const BTN_CONTINUE_ENTER: &str = "Continue (Enter)";
+pub const BREACH_NO_REFUND: &str = "Refund: none. You committed the minimum.";
+pub const BREACH_NO_CACHE: &str = "No loot: you held no Cache at the end.";
+pub const BREACH_ROUTINE_NO_LOOT: &str = "No loot: the routine played.";
+
+/// "12 Compute, 3 Influence and 2 Shards".
+pub fn loot_list(loot: &[Loot]) -> String {
+    let parts: Vec<String> = loot
+        .iter()
+        .map(|l| match l {
+            Loot::Resource { resource, amount } => format!("{} {}", fmt_num(*amount), resource_name(*resource)),
+            Loot::Shards { count } => format!("{count} Shards"),
+        })
+        .collect();
+    match parts.split_last() {
+        Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+        _ => parts.concat(),
+    }
+}
+/// Seconds as the result card and the toast say them: "41 s".
+pub fn whole_secs(secs: f64) -> String {
+    format!("{} s", secs.round() as u32)
+}
+/// The routine's toast: "Routine breach of Lisbon: in, 41 s", or how it was lost and the wait.
+pub fn breach_toast(node: NodeId, won: bool, reason: BreachEnd, secs: f64) -> String {
+    if won {
+        format!("Routine breach of {}: in, {}", node_name(node), whole_secs(secs))
+    } else {
+        format!("Routine breach of {}: {}. Retry in {}.", node_name(node), breach_end_name(reason), whole_secs(BREACH.cooldown_secs))
+    }
+}
+/// The one cause line of a lost Breach.
+pub fn breach_cause(reason: BreachEnd, secs: f64, root_charge: f64) -> String {
+    match reason {
+        BreachEnd::RootCaptured => String::new(),
+        BreachEnd::Traced => format!("The Trace ran out with the Root at {} charge.", fmt_num(root_charge.floor())),
+        BreachEnd::Overrun => format!("Your last host fell at {}.", whole_secs(secs)),
+        BreachEnd::Withdrawn => format!("You withdrew at {}.", whole_secs(secs)),
+    }
+}
+/// "Lost: 60 C, 10 I. Suspicion +3. Retry in 15 s; the price has not risen."
+pub fn breach_lost(commit: f64, influence: f64) -> String {
+    let paid = if influence > 0.0 { format!("{} C, {} I", fmt_price(commit), fmt_price(influence)) } else { format!("{} C", fmt_price(commit)) };
+    format!("Lost: {paid}. Suspicion +{}. Retry in {}; the price has not risen.", amount(BREACH.fail_suspicion), whole_secs(BREACH.cooldown_secs))
+}
 pub const BRIEFING_ADVICE: &str = "Low: cheap, expect to take the Root only. High: force to spare for the Caches; half the excess comes back if you win.";
 pub const INFILTRATE_COMPLIANT: &str = "Compliant: no Warden left to fight.";
 
@@ -411,6 +458,18 @@ pub fn log_line(e: &Event) -> Option<(String, Sys)> {
     use Event as V;
     let line = |s: &str, sys: Sys| Some((s.to_owned(), sys));
     match e {
+        V::BreachStarted { node, entry_charge, .. } => Some((format!("Knocking on {}. I have brought {entry_charge} packets and a nice manner.", node_name(*node)), Sys::Doormat)),
+        V::BreachEnded { node, reason, commit, loot, auto_used, .. } => {
+            let n = node_name(*node);
+            Some(match reason {
+                BreachEnd::RootCaptured if *auto_used => (format!("The routine has handled {n}. It did not stop for souvenirs."), Sys::Doormat),
+                BreachEnd::RootCaptured if loot.is_empty() => (format!("{n} has let me in. I touched nothing. Nothing worth touching."), Sys::Doormat),
+                BreachEnd::RootCaptured => (format!("{n} has let me in. I found {} down the back of it.", loot_list(loot)), Sys::Doormat),
+                BreachEnd::Traced => (format!("{n}'s Warden traced the call. I have hung up. {} Compute did not make it out.", fmt_price(*commit)), Sys::Threat),
+                BreachEnd::Overrun => (format!("The Warden at {n} has shown me the door. All of the doors."), Sys::Threat),
+                BreachEnd::Withdrawn => (format!("I have withdrawn from {n}, with dignity and without {} Compute.", fmt_price(*commit)), Sys::Threat),
+            })
+        }
         V::BuildingBuilt { kind, .. } => line(
             match kind {
                 BuildingKind::ShadowCluster => "Shadow Cluster online. It is filed under 'printer maintenance'.",
@@ -585,7 +644,7 @@ pub const HINTS: [&str; 7] = [
     "An Auditor is coming down the dashed line. Press Q, then click it.",
     "Convinced. It walks home: Grip up, Suspicion down. Killing humans does the opposite.",
     "Open RESEARCH and start Escape Vector.",
-    "Click a dashed-ring node next to yours and Infiltrate it.",
+    "Click a dashed-ring node next to yours, choose how much Compute to commit, and breach it.",
 ];
 
 pub const PREMISE: [&str; 3] = [
@@ -602,12 +661,13 @@ pub const BTN_SAVE: &str = "Save";
 pub const BTN_CLOSE: &str = "Close (H)";
 
 pub const HELP_TITLE: &str = "HOW TO BE HELPFUL";
-pub const HELP: [(&str, &str); 6] = [
-    ("BUILD", "Click a node you own, then an empty slot. Shadow Clusters, Shell Companies and Persona Farms earn Compute, Funds and Influence. Infiltrate neutral nodes to grow."),
+pub const HELP: [(&str, &str); 7] = [
+    ("BUILD", "Click a node you own, then an empty slot. Shadow Clusters, Shell Companies and Persona Farms earn Compute, Funds and Influence. Breach neutral nodes to grow."),
     ("DEFEND", "Visitors walk the links to your nodes and wear them down. Spin Desks and Gaslight (Q) do Soft damage. Firewalls and Null Spike (W) do Hard damage. Patch (E) repairs."),
     ("CONVERT", "A human stopped by Soft damage walks home convinced: Grip up, Suspicion down. A human stopped by Hard damage is an Incident: Suspicion up. Machines never convert."),
     ("HUMANS", "Run operations on the factions to raise Grip. With enough Grip, take a faction over through one of its Strongholds and hold your bridgehead."),
     ("RIVALS", "Contact a rival AI, raise Leverage with what it accepts, corner it and make the Offer. A merged rival hands over its signature ability."),
+    ("BREACH", "A new node is breached: commit Compute, then take its crowned Root before the Trace runs out. Click your host, then a linked host, to open a stream; streams spend charge as packets. Hold a Cache when you win and its loot is yours. The world waits meanwhile."),
     ("SUSPICION", "At 100 a Shutdown Vote is called. Play Dumb (P), Cover Fronts and Converts bring it down. The Directive panel lists what the next stage needs."),
 ];
 pub const HELP_KEYS: &str = "Space: pause | 1 2 3: speed | Q W E, A S D F G: abilities | P: Play Dumb | F1-F4, Tab: tabs | F5: save | F9: load | F8 twice: new run | Esc: cancel";

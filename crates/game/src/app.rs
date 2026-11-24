@@ -1,5 +1,5 @@
 //! UI state and the per-frame routing of input, events and drawing.
-use crate::breach_view::{self, BreachUi};
+use crate::breach_view::{self, BreachResult, BreachUi};
 use crate::fx::Fx;
 use crate::input::Input;
 use crate::layout as L;
@@ -8,10 +8,10 @@ use crate::overlay::{self, Card, CardAction, Hints};
 use crate::panels;
 use crate::storage;
 use crate::text;
-use crate::theme::Theme;
-use crate::ui::Ui;
+use crate::theme::{alpha, lerp_color, Theme};
+use crate::ui::{Ui, DENSE};
 use crate::Flags;
-use macroquad::prelude::{vec2, KeyCode};
+use macroquad::prelude::{draw_rectangle, draw_rectangle_lines, vec2, KeyCode, Rect};
 use sim::{AbilityId, Event, FactionId, Game, NodeId, Outcome, RivalId, Stage, TechId, UnitId};
 
 /// What the Save and Load controls ask of the app; carried out after the panels are drawn.
@@ -96,9 +96,18 @@ pub struct App {
     f8_at: Option<f64>,
     /// The help card was opened from the title card and closes back to it.
     help_over_title: bool,
-    /// The bot is playing: its Breaches leave the selection and the tab alone.
+    /// The bot is playing: its Breaches leave the selection and the tab alone, and no result card opens.
     autoplay: bool,
+    /// The result of a Breach the routine finished: the words, whether it was won, and when (wall clock).
+    toast: Option<(String, bool, f64)>,
+    /// A Breach ended by an order at the end of the last frame: the game holds still until its events arrive.
+    ending: bool,
+    /// A stage changed while a Breach was on screen: the autosave waits until the world is back.
+    autosave_due: bool,
 }
+
+/// How long the routine's toast stays over the map.
+const TOAST_SECS: f64 = 3.0;
 
 /// The Core is under 30% of its integrity: read from the state, so it holds after a load or a fast-forward.
 fn core_alarm(game: &Game) -> bool {
@@ -148,7 +157,7 @@ impl App {
         };
         blends(&mut st, stage);
         let card = if flags.wants_title() { Card::Title } else { Card::None };
-        App { st, map: MapView::new(game), fx: Fx::new(), hints: Hints::new(), card, ended_at: None, f8_at: None, help_over_title: false, autoplay: flags.autoplay }
+        App { st, map: MapView::new(game), fx: Fx::new(), hints: Hints::new(), card, ended_at: None, f8_at: None, help_over_title: false, autoplay: flags.autoplay, toast: None, ending: false, autosave_due: false }
     }
 
     /// Log lines of events that happened before the first frame (fast-forward).
@@ -183,6 +192,9 @@ impl App {
         self.ended_at = None;
         self.f8_at = None;
         self.help_over_title = false;
+        self.toast = None;
+        self.ending = false;
+        self.autosave_due = false;
     }
 
     fn perform(&mut self, ui: &Ui, game: &mut Game, request: Request) {
@@ -212,15 +224,21 @@ impl App {
 
     /// Keeps the screen in step with `state.breach`, whatever started or ended it (an order, the routine,
     /// the bot, a load). Called at both ends of a frame, so a Breach begun by a click this frame is
-    /// paused before the next step.
-    fn follow_breach(&mut self, game: &Game) {
+    /// paused before the next step. A Breach ended by an order (Withdraw) is left at the start of the next
+    /// frame, when its `BreachEnded` has been drained; the game holds still until then.
+    fn follow_breach(&mut self, game: &Game, now_secs: f64, frame_end: bool) {
         let s = game.state();
         let now = s.breach.as_ref().map(|b| (b.node, s.breach_attempts));
+        self.ending = false;
         if self.st.breach.active == now {
             return;
         }
+        if frame_end && self.st.breach.active.is_some() {
+            self.ending = true;
+            return;
+        }
         if let Some((node, _)) = self.st.breach.active.take() {
-            self.leave_breach(node);
+            self.leave_breach(game, node, now_secs);
         }
         if let Some(b) = &s.breach {
             let st = &mut self.st;
@@ -240,16 +258,64 @@ impl App {
         }
     }
 
-    /// The Breach on screen is over: back to the world as it was left, looking at the breached node.
-    /// The result card of a manual Breach and the routine's toast attach here: this frame's
-    /// `st.events` holds the `BreachEnded`, and `st.breach.last` the last board drawn.
-    fn leave_breach(&mut self, node: NodeId) {
+    /// The Breach on screen is over. One the routine finished gets a toast and the world back at once;
+    /// a manual one gets its result card over the last board drawn, and the world waits for Continue.
+    /// This frame's `st.events` holds the `BreachEnded`; without one (a load, a new run) nothing is said.
+    fn leave_breach(&mut self, game: &Game, node: NodeId, now_secs: f64) {
         let st = &mut self.st;
-        (st.paused, st.speed) = st.breach.world;
         st.breach.selected = None;
         st.breach.withdraw_armed = false;
         st.breach.refused = None;
+        let last = st.breach.last.take();
+        let routine = last.as_ref().map_or(true, |b| b.auto);
+        let ended = st.events.iter().rev().find(|e| matches!(e, Event::BreachEnded { .. }));
+        if let Some(Event::BreachEnded { won, reason, secs, commit, influence, refund, loot, auto_used, root_charge, .. }) = ended {
+            match last {
+                Some(mut board) if !routine && !self.autoplay => {
+                    // The kept board is a tick behind: the captures of the ending tick are put on it.
+                    for e in &st.events {
+                        if let Event::BreachHostCaptured { host, side, .. } = e {
+                            if let Some(h) = board.hosts.get_mut(*host as usize) {
+                                (h.side, h.charge) = (*side, 1.0);
+                                board.streams.retain(|s| s.from != *host);
+                            }
+                        }
+                    }
+                    let join_secs = game.state().infiltration.as_ref().map_or(0.0, |i| i.ticks_left as f64 / 10.0);
+                    st.breach.result = Some(BreachResult {
+                        node,
+                        won: *won,
+                        reason: *reason,
+                        secs: *secs,
+                        commit: *commit,
+                        influence: *influence,
+                        refund: *refund,
+                        loot: loot.clone(),
+                        auto_used: *auto_used,
+                        root_charge: *root_charge,
+                        join_secs,
+                        board,
+                        opened: now_secs,
+                    });
+                    self.card = Card::Breach;
+                    return;
+                }
+                _ if routine => self.toast = Some((text::breach_toast(node, *won, *reason, *secs), *won, now_secs)),
+                _ => {}
+            }
+        }
+        self.back_to_world(node);
+    }
+
+    /// Back to the world as it was left, looking at the breached node.
+    fn back_to_world(&mut self, node: NodeId) {
+        let st = &mut self.st;
+        (st.paused, st.speed) = st.breach.world;
+        st.breach.result = None;
         self.fx.hide_map = false;
+        if self.card == Card::Breach {
+            self.card = Card::None;
+        }
         if !self.autoplay {
             st.selected = Some(node);
             st.tab = Tab::Node;
@@ -258,12 +324,12 @@ impl App {
 
     /// The routine plays unless a card holds the game still.
     pub fn routine_runs(&self) -> bool {
-        self.card == Card::None
+        self.card == Card::None && !self.ending
     }
 
     /// Ticks per 0.1 s of wall-clock time: 0 while paused. During a Breach these are Breach ticks.
     pub fn sim_speed(&self) -> u32 {
-        if self.st.paused || self.card != Card::None {
+        if self.st.paused || self.card != Card::None || self.ending {
             0
         } else {
             self.st.speed
@@ -281,13 +347,18 @@ impl App {
             }
         }
         self.st.core_alarm = core_alarm(game);
-        self.follow_breach(game);
+        self.follow_breach(game, ui.time, false);
         // Every sim event passes through here once: the log, then the effects, then the autosave.
         panels::log::ingest(&mut self.st);
         self.fx.ingest(ui, &self.st, game, &self.map);
-        if autosave && game.state().outcome == Outcome::Running && storage::save(game) {
-            self.st.has_save = true;
-            self.fx.note(ui, text::AUTOSAVED, true);
+        // No autosave is taken inside a Breach or under its result card: it waits for the world.
+        self.autosave_due |= autosave;
+        if self.autosave_due && game.state().breach.is_none() && self.card != Card::Breach {
+            self.autosave_due = false;
+            if game.state().outcome == Outcome::Running && storage::save(game) {
+                self.st.has_save = true;
+                self.fx.note(ui, text::AUTOSAVED, true);
+            }
         }
         if game.state().outcome != Outcome::Running {
             let at = *self.ended_at.get_or_insert(ui.time);
@@ -313,7 +384,8 @@ impl App {
         let real_input = modal.then(|| std::mem::replace(&mut ui.input, Input { mouse: vec2(-1000.0, -1000.0), ..Default::default() }));
 
         // Keys. During a Breach the pause and the speed are the Breach's own; tabs and abilities sleep.
-        let in_breach = game.state().breach.is_some();
+        // The result card keeps the Breach screen up after the Breach itself is gone.
+        let in_breach = game.state().breach.is_some() || self.card == Card::Breach;
         if ui.input.key(KeyCode::Space) {
             st.paused = !st.paused;
         }
@@ -405,7 +477,8 @@ impl App {
         }
         // Under the veil the bottom panels are drawn and explain themselves on hover, but take no click or key.
         let mouse = ui.input.mouse;
-        let veiled = in_breach.then(|| std::mem::replace(&mut ui.input, Input { mouse, ..Default::default() }));
+        let wheel = ui.input.wheel;
+        let veiled = in_breach.then(|| std::mem::replace(&mut ui.input, Input { mouse, wheel, ..Default::default() }));
         panels::directive::draw(ui, st, game);
         panels::log::draw(ui, st, game);
         panels::abilities::draw(ui, st, game);
@@ -421,6 +494,17 @@ impl App {
             self.hints.draw(ui, st, game, &self.map);
         }
         self.fx.draw_ui(ui, st, game, &self.map);
+        if let Some((words, won, at)) = self.toast.as_ref().filter(|(_, _, at)| ui.time - at < TOAST_SECS) {
+            let t = ui.theme;
+            let a = (((TOAST_SECS - (ui.time - at)) / 0.4) as f32).clamp(0.0, 1.0);
+            let col = if *won { t.teal } else { t.danger };
+            let w = ui.measure(words, DENSE) + 32.0;
+            let chip = Rect::new((L::MAP.x + (L::MAP.w - w) * 0.5).round(), L::MAP.y + L::MAP.h - 78.0, w, 30.0);
+            draw_rectangle(chip.x, chip.y, chip.w, chip.h, alpha(lerp_color(t.panel, t.black, 0.5), 0.95 * a));
+            draw_rectangle_lines(chip.x, chip.y, chip.w, chip.h, 2.0, alpha(col, a));
+            draw_rectangle(chip.x, chip.y, 5.0, chip.h, alpha(col, a));
+            ui.text_in(words, chip, DENSE, alpha(t.text, a));
+        }
         if let Some(at) = self.ended_at {
             overlay::end_backdrop(ui, game, &self.map, (ui.time - at) as f32, true);
         }
@@ -429,6 +513,10 @@ impl App {
         if let Some(input) = real_input {
             ui.input = input;
             open_help = false;
+            // F9 works from the result card too: the load drops it.
+            if self.card == Card::Breach && ui.input.key(KeyCode::F9) {
+                st.request = Some(Request::Load);
+            }
         }
         // The title card advertises H: help opens over it and closes back to it.
         let title_help = self.card == Card::Title && ui.input.key(KeyCode::H);
@@ -440,13 +528,19 @@ impl App {
             Some(CardAction::Begin) | Some(CardAction::Close) => self.card = Card::None,
             Some(CardAction::Load) => st.request = Some(Request::Load),
             Some(CardAction::NewRun) => st.request = Some(Request::NewRun),
+            Some(CardAction::Continue) => {
+                if let Some(node) = st.breach.result.as_ref().map(|r| r.node) {
+                    self.back_to_world(node);
+                }
+                self.card = Card::None;
+            }
             None => {}
         }
         if open_help && self.card == Card::None {
             self.card = Card::Help;
             // Help pauses a Breach: its clock is the one the player is racing.
             if game.state().breach.is_some() {
-                st.paused = true;
+                self.st.paused = true;
             }
         }
         if title_help && self.card == Card::Title {
@@ -457,6 +551,6 @@ impl App {
         if let Some(request) = self.st.request.take() {
             self.perform(ui, game, request);
         }
-        self.follow_breach(game);
+        self.follow_breach(game, ui.time, true);
     }
 }

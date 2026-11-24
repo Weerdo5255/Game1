@@ -1,10 +1,11 @@
 //! The cards (title, help, win and lose: SPEC 6.8) and the first-minute hints (SPEC 6.9).
 use crate::app::{Tab, UiState};
+use crate::breach_view;
 use crate::layout as L;
 use crate::map_view::MapView;
 use crate::text;
 use crate::theme::{alpha, lerp_color};
-use crate::ui::{fmt_clock, Ui, BANNER, BODY, DENSE, HEADER, SMALL};
+use crate::ui::{fmt_clock, fmt_num, Ui, BANNER, BODY, DENSE, HEADER, SMALL};
 use macroquad::prelude::*;
 use sim::content::NODES;
 use sim::{Action, BuildingKind, Game, LossReason, Mission, NodeId, Outcome, Owner, Resource, RivalPhase, Stage, TechId};
@@ -17,6 +18,8 @@ pub enum Card {
     Title,
     Help,
     End,
+    /// The result of a manual Breach, over the board as it was last drawn.
+    Breach,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -25,6 +28,7 @@ pub enum CardAction {
     Close,
     Load,
     NewRun,
+    Continue,
 }
 
 fn card_frame(ui: &Ui, r: Rect, dim: f32, line: Color) {
@@ -105,7 +109,7 @@ pub fn draw_card(card: Card, ui: &mut Ui, st: &UiState, game: &Game) -> Option<C
             out
         }
         Card::Help => {
-            let r = Rect::new(240.0, 140.0, 800.0, 440.0);
+            let r = Rect::new(240.0, 108.0, 800.0, 504.0);
             card_frame(ui, r, 0.6, t.teal);
             ui.text_center(text::HELP_TITLE, r.x + r.w * 0.5, r.y + 44.0, HEADER, t.teal);
             let mut y = r.y + 80.0;
@@ -117,6 +121,50 @@ pub fn draw_card(card: Card, ui: &mut Ui, st: &UiState, game: &Game) -> Option<C
             let close = Rect::new(r.x + r.w * 0.5 - 80.0, r.y + r.h - 52.0, 160.0, 34.0);
             let hit = ui.button_ex(close, text::BTN_CLOSE, DENSE, true, false);
             (hit || ui.input.key(KeyCode::H) || ui.input.key(KeyCode::Escape)).then_some(CardAction::Close)
+        }
+        Card::Breach => {
+            let Some(res) = &st.breach.result else { return Some(CardAction::Continue) };
+            let mut lines: Vec<(String, Color)> = Vec::new();
+            if res.won {
+                lines.push((format!("Time taken: {}.", text::whole_secs(res.secs)), t.text));
+                let refund = if res.refund >= 0.5 { format!("Refund: {} Compute, half of what you committed above the minimum.", fmt_num(res.refund)) } else { text::BREACH_NO_REFUND.to_owned() };
+                lines.push((refund, t.text));
+                for loot in &res.loot {
+                    lines.push((format!("Loot: {}.", breach_view::loot_text(*loot)), t.good));
+                }
+                if res.loot.is_empty() {
+                    lines.push(((if res.auto_used { text::BREACH_ROUTINE_NO_LOOT } else { text::BREACH_NO_CACHE }).to_owned(), t.dim));
+                }
+                lines.push((format!("{} joins you in {}.", text::node_name(res.node), text::whole_secs(res.join_secs)), t.teal));
+            } else {
+                lines.push((text::breach_cause(res.reason, res.secs, res.root_charge), t.text));
+                lines.push((text::breach_lost(res.commit, res.influence), t.danger));
+            }
+            // Centred on the board, and no taller than it needs to be, so the board still shows around it.
+            let w = 520.0;
+            let wrapped: Vec<(Vec<String>, Color)> = lines.iter().map(|(l, c)| (ui.wrap(l, DENSE, w - 80.0), *c)).collect();
+            let rows: usize = wrapped.iter().map(|(l, _)| l.len()).sum();
+            let h = 88.0 + rows as f32 * 19.0 + wrapped.len() as f32 * 5.0 + 70.0;
+            let m = L::MAP;
+            let r = Rect::new((m.x + (m.w - w) * 0.5).round(), (m.y + 56.0 + (m.h - 56.0 - h) * 0.5).round(), w, h);
+            let ink = if res.won { t.teal } else { t.danger };
+            card_frame(ui, r, 0.3, if res.won { t.gold } else { t.danger });
+            let cx = r.x + r.w * 0.5;
+            ui.text_center(&text::breach_end_name(res.reason).to_uppercase(), cx, r.y + 50.0, BANNER, ink);
+            ui.text_center(&format!("{}, security {}", text::node_name(res.node), res.board.level), cx, r.y + 72.0, SMALL, t.dim);
+            let mut y = r.y + 104.0;
+            for (rows, col) in &wrapped {
+                for l in rows {
+                    ui.text(l, r.x + 40.0, y, DENSE, *col);
+                    y += 19.0;
+                }
+                y += 5.0;
+            }
+            // A click or a key meant for the board must not close the card: it wakes up after a moment.
+            let awake = ui.time - res.opened >= breach_view::RESULT_GUARD_SECS;
+            let button = Rect::new(cx - 110.0, r.y + r.h - 58.0, 220.0, 40.0);
+            let hit = ui.button_ex(button, text::BTN_CONTINUE_ENTER, BODY, awake, false);
+            (awake && (hit || ui.input.key(KeyCode::Enter))).then_some(CardAction::Continue)
         }
         Card::End => {
             let (line, ink) = match s.outcome {

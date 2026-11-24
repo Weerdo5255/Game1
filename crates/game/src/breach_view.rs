@@ -10,7 +10,7 @@ use crate::ui::{fmt_num, fmt_secs, Ui, BODY, DENSE, HEADER, SMALL};
 use macroquad::prelude::*;
 use sim::breach;
 use sim::content::{BREACH, NODES};
-use sim::{Action, BreachHost, BreachState, Game, HostKind, Loot, NodeId, Side};
+use sim::{Action, BreachEnd, BreachHost, BreachState, Event, Game, HostKind, Loot, NodeId, Side};
 use std::collections::BTreeMap;
 
 /// Where the board's 0..1 coordinates land on screen. Its shape is the sim's board aspect, and at the
@@ -25,8 +25,31 @@ pub const HOST_R: f32 = 24.0;
 /// A click is taken by the nearest host within this many pixels.
 const PICK_R: f32 = 34.0;
 const REFUSED_SECS: f64 = 2.0;
+const RING_SECS: f64 = 0.6;
+const FLOAT_SECS: f64 = 1.6;
+/// The result card takes no input for this long, so a click meant for the board cannot close it.
+pub const RESULT_GUARD_SECS: f64 = 0.6;
 /// Breach ticks per frame while the routine plays.
 pub const ROUTINE_TICKS_PER_FRAME: u32 = 40;
+
+/// How a manual Breach ended, shown on the result card over the board as it was last drawn.
+pub struct BreachResult {
+    pub node: NodeId,
+    pub won: bool,
+    pub reason: BreachEnd,
+    pub secs: f64,
+    pub commit: f64,
+    pub influence: f64,
+    pub refund: f64,
+    pub loot: Vec<Loot>,
+    pub auto_used: bool,
+    pub root_charge: f64,
+    /// Seconds of the infiltration channel a win started.
+    pub join_secs: f64,
+    pub board: BreachState,
+    /// Wall-clock time the card opened.
+    pub opened: f64,
+}
 
 /// What the frontend remembers about a Breach and its Briefing.
 pub struct BreachUi {
@@ -48,11 +71,17 @@ pub struct BreachUi {
     pub commit: Option<(NodeId, f64)>,
     /// The commit slider is being dragged.
     pub dragging: bool,
+    /// The result card's content; while it is set the board stays on screen and the game holds still.
+    pub result: Option<BreachResult>,
+    /// Capture rings: host, the side that took it and the wall-clock time.
+    rings: Vec<(u8, Side, f64)>,
+    /// Words drifting up from a host: a Cache's loot when it is taken, a note when it is lost.
+    floats: Vec<(u8, String, Color, f64)>,
 }
 
 impl BreachUi {
     pub fn new() -> BreachUi {
-        BreachUi { active: None, world: (false, 1), selected: None, withdraw_armed: false, refused: None, unfired: BTreeMap::new(), last: None, commit: None, dragging: false }
+        BreachUi { active: None, world: (false, 1), selected: None, withdraw_armed: false, refused: None, unfired: BTreeMap::new(), last: None, commit: None, dragging: false, result: None, rings: Vec::new(), floats: Vec::new() }
     }
 
     /// A Breach has come on screen: nothing of the last one carries over.
@@ -62,6 +91,14 @@ impl BreachUi {
         self.refused = None;
         self.unfired.clear();
         self.last = None;
+        self.result = None;
+        self.rings.clear();
+        self.floats.clear();
+    }
+
+    /// The board to draw: the running Breach, or the kept copy under the result card.
+    fn shown(&self, game: &Game) -> Option<BreachState> {
+        game.state().breach.clone().or_else(|| self.result.as_ref().map(|r| r.board.clone()))
     }
 }
 
@@ -229,7 +266,9 @@ fn arrowhead(tip: Vec2, d: Vec2, s: f32, col: Color) {
 /// The board, its header band and the pointer's orders. Drawn in place of the world map.
 pub fn draw_board(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let t = ui.theme;
-    let Some(b) = game.state().breach.clone() else { return };
+    let Some(b) = st.breach.shown(game) else { return };
+    // Under the result card the board is a still picture.
+    let live = game.state().breach.is_some();
     let m = L::MAP;
     draw_rectangle(m.x, m.y, m.w, m.h, lerp_color(t.bg, t.black, 0.35));
     for i in 1..11 {
@@ -260,6 +299,33 @@ pub fn draw_board(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
             }
         }
     }
+
+    // Captures: a ring in the new side's colour, a Cache's loot floating up when it is taken and a note when it is lost.
+    if live {
+        for e in &st.events {
+            let Event::BreachHostCaptured { host, side, kind } = e else { continue };
+            if (*host as usize) >= b.hosts.len() {
+                continue;
+            }
+            st.breach.rings.push((*host, *side, ui.time));
+            let was_mine = st.breach.last.as_ref().and_then(|l| l.hosts.get(*host as usize)).is_some_and(|h| h.side == Side::Player);
+            if *kind == HostKind::Cache && !b.auto_used {
+                if let (Side::Player, Some(loot)) = (*side, b.hosts[*host as usize].loot) {
+                    let col = match loot {
+                        Loot::Resource { resource, .. } => t.resource(resource),
+                        Loot::Shards { .. } => t.shards,
+                    };
+                    st.breach.floats.push((*host, format!("{} if you win", loot_text(loot)), col, ui.time));
+                } else if was_mine {
+                    st.breach.floats.push((*host, text::BREACH_CACHE_LOST.to_owned(), t.danger, ui.time));
+                }
+            }
+        }
+        let n = st.breach.rings.len().saturating_sub(32);
+        st.breach.rings.drain(..n);
+    }
+    st.breach.rings.retain(|r| ui.time - r.2 < RING_SECS);
+    st.breach.floats.retain(|f| ui.time - f.3 < FLOAT_SECS);
 
     // Links, then streams over them, each stream a little to its own right so two-way traffic reads.
     for l in &b.links {
@@ -307,6 +373,29 @@ pub fn draw_board(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
         }
     }
 
+    for &(h, side, at) in &st.breach.rings {
+        let p = ((ui.time - at) / RING_SECS) as f32;
+        let c = pos(h);
+        let e = 1.0 - (1.0 - p) * (1.0 - p);
+        draw_circle_lines(c.x, c.y, HOST_R + 2.0 + 30.0 * e, 3.0, alpha(side_color(&t, side), 1.0 - p));
+        draw_circle(c.x, c.y, HOST_R + 2.0, alpha(side_color(&t, side), 0.35 * (1.0 - p)));
+    }
+    for (h, words, col, at) in &st.breach.floats {
+        let p = ((ui.time - at) / FLOAT_SECS) as f32;
+        let c = pos(*h);
+        let w = ui.measure(words, DENSE);
+        let x = (c.x - w * 0.5).clamp(m.x + 4.0, m.x + m.w - w - 4.0).round();
+        let y = (c.y - HOST_R - 12.0 - 26.0 * (1.0 - (1.0 - p) * (1.0 - p))).round();
+        let a = 1.0 - p * p * p;
+        ui.text(words, x + 1.0, y + 1.0, DENSE, alpha(t.black, 0.8 * a));
+        ui.text(words, x, y, DENSE, alpha(*col, a));
+    }
+
+    // The first manual Breach of a run explains itself, from the Breach's own state.
+    if live && !b.auto && game.state().breach_attempts == 1 {
+        first_callouts(ui, &b, &adj);
+    }
+
     // The header band.
     let hb = HEADER_BAND;
     draw_rectangle(hb.x, hb.y, hb.w, hb.h, alpha(lerp_color(t.panel, t.black, 0.3), 0.95));
@@ -316,7 +405,9 @@ pub fn draw_board(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let px = hb.x + 12.0 + ui.measure(&title, HEADER) + 14.0;
     let after = security_pips(ui, px, hb.y + 12.0, b.level);
     ui.text(&format!("security {}", b.level), after + 4.0, hb.y + 22.0, SMALL, t.dim);
-    let (status, status_col) = if b.auto {
+    let (status, status_col) = if !live {
+        ("", t.dim)
+    } else if b.auto {
         (text::BREACH_ROUTINE_PLAYING, t.gold)
     } else if st.paused {
         (text::BREACH_PAUSED, t.gold)
@@ -339,7 +430,7 @@ pub fn draw_board(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     // The pointer. While the routine plays the board only shows.
     let over = ui.input.over(Rect::new(m.x, hb.y + hb.h, m.w, m.h - hb.h));
     let hover = if over { host_at(&b, ui.input.mouse) } else { None };
-    if over && !b.auto {
+    if over && live && !b.auto {
         if ui.input.left_pressed {
             match (sel, hover) {
                 (_, None) => st.breach.selected = None,
@@ -375,8 +466,15 @@ pub fn draw_board(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
         let beat = 0.55 + 0.45 * (age * 16.0).cos();
         draw_circle_lines(c.x, c.y, HOST_R + 11.0, 3.0, alpha(t.danger, beat * (1.0 - age / REFUSED_SECS as f32 * 0.5)));
         let w = ui.measure(&why, DENSE) + 16.0;
-        let x = if c.x + HOST_R + 14.0 + w > m.x + m.w - 4.0 { c.x - HOST_R - 14.0 - w } else { c.x + HOST_R + 14.0 };
-        let chip = Rect::new(x.max(m.x + 4.0).round(), (c.y - 36.0).round(), w, 22.0);
+        // Beside the host: to its right, else to its left, else over it.
+        let (right, left) = (c.x + HOST_R + 14.0, c.x - HOST_R - 14.0 - w);
+        let chip = if right + w <= m.x + m.w - 4.0 {
+            Rect::new(right.round(), (c.y - 36.0).round(), w, 22.0)
+        } else if left >= m.x + 4.0 {
+            Rect::new(left.round(), (c.y - 36.0).round(), w, 22.0)
+        } else {
+            Rect::new((c.x - w * 0.5).clamp(m.x + 4.0, m.x + m.w - w - 4.0).round(), (c.y - HOST_R - 40.0).round(), w, 22.0)
+        };
         draw_rectangle(chip.x, chip.y, chip.w, chip.h, alpha(lerp_color(t.panel, t.black, 0.5), 0.95));
         draw_rectangle_lines(chip.x, chip.y, chip.w, chip.h, 1.5, t.danger);
         ui.text_in(&why, chip, DENSE, t.danger);
@@ -388,6 +486,62 @@ pub fn draw_board(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
         ui.tooltip(host_lines(&t, &b, h, b.hosts[h as usize].charge));
     }
     st.breach.last = Some(b);
+}
+
+/// A gold box with an arrow to a host, put where it covers no host.
+fn callout(ui: &Ui, b: &BreachState, target: u8, words: &str) {
+    let t = ui.theme;
+    let lines = ui.wrap(words, DENSE, 250.0);
+    let w = lines.iter().map(|l| ui.measure(l, DENSE)).fold(0.0, f32::max) + 26.0;
+    let h = lines.len() as f32 * 18.0 + 14.0;
+    let c = host_pos(BOARD, &b.hosts[target as usize]);
+    let gap = HOST_R + 24.0;
+    let top = HEADER_BAND.y + HEADER_BAND.h + 6.0;
+    let area = Rect::new(L::MAP.x + 6.0, top, L::MAP.w - 12.0, L::MAP.y + L::MAP.h - 6.0 - top);
+    let spots = [vec2(c.x - w * 0.5, c.y - gap - h), vec2(c.x - w * 0.5, c.y + gap), vec2(c.x + gap, c.y - h * 0.5), vec2(c.x - gap - w, c.y - h * 0.5)];
+    let boxed = |p: Vec2| Rect::new(p.x.clamp(area.x, area.x + area.w - w).round(), p.y.clamp(area.y, area.y + area.h - h).round(), w, h);
+    let clear = |r: &Rect| {
+        b.hosts.iter().all(|host| {
+            let q = host_pos(BOARD, host);
+            q.distance(vec2(q.x.clamp(r.x, r.x + r.w), q.y.clamp(r.y, r.y + r.h))) > HOST_R + 10.0
+        })
+    };
+    let r = spots.iter().map(|&p| boxed(p)).find(clear).unwrap_or_else(|| boxed(spots[0]));
+    let from = vec2(c.x.clamp(r.x, r.x + r.w), c.y.clamp(r.y, r.y + r.h));
+    let d = (c - from).normalize_or_zero();
+    let bob = (ui.time as f32 * 5.0).sin() * 3.0;
+    let tip = c - d * (HOST_R + 8.0 + bob);
+    draw_line(from.x, from.y, tip.x - d.x * 8.0, tip.y - d.y * 8.0, 3.0, t.gold);
+    arrowhead(tip, d, 13.0, t.gold);
+    draw_rectangle(r.x + 3.0, r.y + 3.0, r.w, r.h, alpha(t.black, 0.5));
+    draw_rectangle(r.x, r.y, r.w, r.h, lerp_color(t.panel, t.black, 0.3));
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, t.gold);
+    draw_rectangle(r.x, r.y, 5.0, r.h, t.gold);
+    for (i, l) in lines.iter().enumerate() {
+        ui.text(l, r.x + 15.0, r.y + 20.0 + i as f32 * 18.0, DENSE, t.text);
+    }
+}
+
+/// The two callouts of a run's first manual Breach. Until the first stream the Entry pulses and its
+/// cheapest neutral neighbour says what to click; after it the Root says what the game is about, until
+/// the player holds a third host.
+fn first_callouts(ui: &Ui, b: &BreachState, adj: &[Vec<u8>]) {
+    let t = ui.theme;
+    let mine = |i: u8| b.hosts[i as usize].side == Side::Player;
+    let held = b.hosts.iter().filter(|h| h.side == Side::Player).count();
+    let moved = held != 1 || b.streams.iter().any(|s| mine(s.from)) || b.packets.iter().any(|p| p.side == Side::Player);
+    if !moved {
+        let Some(entry) = breach::entry_index(b) else { return };
+        let c = host_pos(BOARD, &b.hosts[entry as usize]);
+        let pulse = 0.5 + 0.5 * (ui.time as f32 * 4.0).sin();
+        draw_circle_lines(c.x, c.y, HOST_R + 6.0 + 8.0 * pulse, 3.0, alpha(t.gold, 0.9 - 0.5 * pulse));
+        let cheapest = adj[entry as usize].iter().copied().filter(|&i| b.hosts[i as usize].side == Side::Neutral).min_by(|&i, &j| b.hosts[i as usize].charge.total_cmp(&b.hosts[j as usize].charge));
+        if let Some(target) = cheapest {
+            callout(ui, b, target, text::BREACH_CALLOUT_FIRST);
+        }
+    } else if let Some(root) = breach::root_index(b).filter(|_| (1..3).contains(&held)) {
+        callout(ui, b, root, text::BREACH_CALLOUT_SECOND);
+    }
 }
 
 /// A legend row: a small sample and its meaning.
@@ -406,7 +560,7 @@ fn legend(ui: &Ui, x: f32, y: f32, kind: HostKind, label: &str) {
 /// The Breach panel, in place of the tabs: objective, loot, legend, controls and the three buttons.
 pub fn draw_panel(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     let t = ui.theme;
-    let Some(b) = game.state().breach.clone() else { return };
+    let Some(b) = st.breach.shown(game) else { return };
     let r = PANEL;
     ui.frame(r);
     let (x, w) = (r.x + 8.0, r.w - 16.0);
@@ -473,6 +627,11 @@ pub fn draw_panel(ui: &mut Ui, st: &mut UiState, game: &mut Game) {
     if crate::panels::act_frame(ui, routine, if b.auto { "The routine is finishing it" } else { "Let the routine finish" }, "", text::BREACH_ROUTINE_TIP, &res, b.auto) {
         let _ = game.apply(set_auto);
         st.breach.selected = None;
+        // Taking the Breach back from the routine is a fresh start: stopped, at 1x.
+        if b.auto {
+            st.paused = true;
+            st.speed = 1;
+        }
     }
     ui.text_center(text::BREACH_ROUTINE_WARNING, x + w * 0.5, routine.y + 42.0, SMALL, if b.auto_used { t.danger } else { t.dim });
     let withdraw = Rect::new(x, r.y + r.h - 34.0, w, 26.0);
